@@ -306,6 +306,54 @@
     white-space: nowrap;
   }
   .toast.show { opacity: 1; }
+
+  /* AUTH SCREEN */
+  .auth-screen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 500; padding: 20px;
+  }
+  .auth-box {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 380px;
+  }
+  .auth-logo { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+  .auth-sub  { font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 28px; }
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .auth-tab  {
+    flex: 1; background: none; border: none; color: var(--muted);
+    padding: 10px; cursor: pointer; font-size: 12px;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: .04em;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+  }
+  .auth-tab.active { color: var(--green); border-bottom-color: var(--green); }
+  .auth-field { margin-bottom: 14px; }
+  .auth-field label { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+  .auth-field input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 7px; color: var(--text); padding: 10px 12px;
+    font-size: 14px; font-family: 'JetBrains Mono', monospace; outline: none;
+    transition: border-color .15s;
+  }
+  .auth-field input:focus { border-color: var(--green); }
+  .auth-btn {
+    width: 100%; background: var(--green); color: #08080a; border: none;
+    border-radius: 8px; padding: 12px; font-weight: 700; font-size: 14px;
+    cursor: pointer; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: .03em; margin-top: 6px; transition: opacity .15s;
+  }
+  .auth-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .auth-error { color: var(--red); font-size: 11px; margin-top: 10px; text-align: center; min-height: 16px; }
+  .auth-user-bar {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; color: var(--muted);
+  }
+  .auth-user-name { color: var(--green); font-weight: 700; }
+  .auth-logout {
+    background: none; border: 1px solid var(--border2); color: var(--muted);
+    border-radius: 5px; padding: 3px 8px; cursor: pointer; font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
 </style>
 </head>
 <body>
@@ -313,13 +361,46 @@
 <div class="loading" id="loading">CONNECTING...</div>
 <div class="toast" id="toast"></div>
 
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">🥷 Ninja Tracker</div>
+    <div class="auth-sub">Commission Tracking · Beta</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Log In</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+    <!-- LOGIN -->
+    <div id="form-login">
+      <div class="auth-field"><label>Email</label><input type="email" id="login-email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div class="auth-field"><label>Password</label><input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <button class="auth-btn" onclick="doLogin()" id="login-btn">Log In</button>
+      <div class="auth-error" id="login-error"></div>
+    </div>
+    <!-- SIGNUP -->
+    <div id="form-signup" style="display:none">
+      <div class="auth-field"><label>Your Name</label><input type="text" id="signup-name" placeholder="First Last" onkeydown="if(event.key==='Enter')doSignup()"/></div>
+      <div class="auth-field"><label>Email</label><input type="email" id="signup-email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')doSignup()"/></div>
+      <div class="auth-field"><label>Password</label><input type="password" id="signup-pw" placeholder="Choose a password" onkeydown="if(event.key==='Enter')doSignup()"/></div>
+      <button class="auth-btn" onclick="doSignup()" id="signup-btn">Create Account</button>
+      <div class="auth-error" id="signup-error"></div>
+    </div>
+  </div>
+</div>
+
 <header class="header">
   <div class="header-inner">
     <div>
       <div class="header-label">Commission Tracker</div>
       <div class="header-title">Ninja Tracker</div>
     </div>
-    <div class="pills">
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+      <div class="auth-user-bar">
+        <span>👤</span>
+        <span class="auth-user-name" id="header-name"></span>
+        <button class="auth-logout" onclick="doLogout()">Log out</button>
+      </div>
+      <div class="pills">
       <div class="pill" style="border:1px solid #00e5a028">
         <div class="pill-val" style="color:var(--green)" id="pill-week">$0.00</div>
         <div class="pill-lbl">This Week</div>
@@ -331,6 +412,7 @@
       <div class="pill" style="border:1px solid #55555528">
         <div class="pill-val" id="pill-diff">+$0.00</div>
         <div class="pill-lbl">Difference</div>
+      </div>
       </div>
     </div>
   </div>
@@ -509,6 +591,76 @@
 <script>
 const API = "https://isg-tracker.onrender.com";
 
+// ── Auth State ────────────────────────────────────────────────────────────────
+let authToken = localStorage.getItem("nt_token") || null;
+let authUser  = JSON.parse(localStorage.getItem("nt_user") || "null");
+
+function getHeaders() {
+  return { "Content-Type":"application/json", "Authorization":`Bearer ${authToken}` };
+}
+
+// ── Auth UI ───────────────────────────────────────────────────────────────────
+function switchAuthTab(tab) {
+  document.getElementById("form-login").style.display  = tab==="login"  ? "block":"none";
+  document.getElementById("form-signup").style.display = tab==="signup" ? "block":"none";
+  document.getElementById("tab-login").className  = "auth-tab"+(tab==="login" ?" active":"");
+  document.getElementById("tab-signup").className = "auth-tab"+(tab==="signup"?" active":"");
+}
+
+async function doLogin() {
+  const email = document.getElementById("login-email").value.trim();
+  const pw    = document.getElementById("login-pw").value;
+  const errEl = document.getElementById("login-error");
+  const btn   = document.getElementById("login-btn");
+  if (!email||!pw) { errEl.textContent="Please fill in all fields"; return; }
+  btn.disabled=true; btn.textContent="Logging in..."; errEl.textContent="";
+  try {
+    const r = await fetch(`${API}/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password:pw})});
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent=d.error||"Login failed"; btn.disabled=false; btn.textContent="Log In"; return; }
+    setSession(d);
+  } catch(e) { errEl.textContent="Cannot reach server"; btn.disabled=false; btn.textContent="Log In"; }
+}
+
+async function doSignup() {
+  const name  = document.getElementById("signup-name").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const pw    = document.getElementById("signup-pw").value;
+  const errEl = document.getElementById("signup-error");
+  const btn   = document.getElementById("signup-btn");
+  if (!name||!email||!pw) { errEl.textContent="Please fill in all fields"; return; }
+  if (pw.length < 6) { errEl.textContent="Password must be at least 6 characters"; return; }
+  btn.disabled=true; btn.textContent="Creating account..."; errEl.textContent="";
+  try {
+    const r = await fetch(`${API}/auth/signup`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,email,password:pw})});
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent=d.error||"Signup failed"; btn.disabled=false; btn.textContent="Create Account"; return; }
+    setSession(d);
+  } catch(e) { errEl.textContent="Cannot reach server"; btn.disabled=false; btn.textContent="Create Account"; }
+}
+
+function setSession(user) {
+  authToken = user.token;
+  authUser  = user;
+  localStorage.setItem("nt_token", authToken);
+  localStorage.setItem("nt_user",  JSON.stringify(user));
+  document.getElementById("auth-screen").style.display="none";
+  document.getElementById("header-name").textContent=user.name;
+  loadData();
+}
+
+function doLogout() {
+  authToken=null; authUser=null;
+  localStorage.removeItem("nt_token");
+  localStorage.removeItem("nt_user");
+  orders=[]; paychecks=[];
+  document.getElementById("auth-screen").style.display="flex";
+  document.getElementById("login-pw").value="";
+  document.getElementById("login-error").textContent="";
+  document.getElementById("login-btn").disabled=false;
+  document.getElementById("login-btn").textContent="Log In";
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 let orders    = [];
 let paychecks = [];
@@ -588,8 +740,10 @@ function buildBreakdown(o){
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function loadData(){
+  if (!authToken) return;
   try {
-    const r = await fetch(`${API}/data`);
+    const r = await fetch(`${API}/data`, { headers: getHeaders() });
+    if (r.status === 401) { doLogout(); return; }
     const d = await r.json();
     orders    = d.orders    || [];
     paychecks = d.paychecks || [];
@@ -611,11 +765,11 @@ function setSyncStatus(ok){
 }
 
 async function apiPost(path,body){
-  const r=await fetch(`${API}${path}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const r=await fetch(`${API}${path}`,{method:"POST",headers:getHeaders(),body:JSON.stringify(body)});
   return r.json();
 }
 async function apiDelete(path){
-  const r=await fetch(`${API}${path}`,{method:"DELETE"});
+  const r=await fetch(`${API}${path}`,{method:"DELETE",headers:getHeaders()});
   return r.json();
 }
 
@@ -711,7 +865,7 @@ async function submitOrder(){
   try {
     if(editingId){
       await fetch(`${API}/orders/${editingId}`,{
-        method:"PUT",headers:{"Content-Type":"application/json"},
+        method:"PUT",headers:getHeaders(),
         body:JSON.stringify(order)
       });
       showToast("✓ Order updated");
@@ -1256,8 +1410,18 @@ function updateAll(){
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById("ob-date").value=today();
 document.getElementById("pc-weekstart").value=getWeekStart(today());
-loadData();
-setInterval(loadData, 30000); // auto-refresh every 30s
+
+// Check for existing session
+if (authToken && authUser) {
+  document.getElementById("auth-screen").style.display="none";
+  document.getElementById("header-name").textContent=authUser.name;
+  loadData();
+} else {
+  document.getElementById("loading").style.opacity="0";
+  setTimeout(()=>document.getElementById("loading").style.display="none",400);
+}
+
+setInterval(()=>{ if(authToken) loadData(); }, 30000);
 </script>
 </body>
 </html>
