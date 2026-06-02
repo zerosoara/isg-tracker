@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Ninja Tracker — Admin</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
+  :root {
+    --bg:#08080a; --bg2:#0f0f13; --bg3:#141418;
+    --border:#1e1e26; --border2:#2a2a35;
+    --green:#00e5a0; --blue:#00b8ff; --purple:#a78bfa;
+    --orange:#fb923c; --yellow:#facc15; --red:#ff6b6b;
+    --text:#e8e8f0; --muted:#7a7a8a; --dim:#9a9aaa;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'JetBrains Mono',monospace; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .login-box { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:32px 28px; width:100%; max-width:340px; }
+  .logo { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; color:var(--green); margin-bottom:4px; }
+  .sub  { font-size:10px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; margin-bottom:24px; }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:5px; }
+  .field input { width:100%; background:var(--bg); border:1px solid var(--border2); border-radius:7px; color:var(--text); padding:10px 12px; font-size:13px; font-family:'JetBrains Mono',monospace; outline:none; transition:border-color .15s; }
+  .field input:focus { border-color:var(--green); }
+  .btn { width:100%; background:var(--green); color:#08080a; border:none; border-radius:8px; padding:11px; font-weight:700; font-size:13px; cursor:pointer; font-family:'JetBrains Mono',monospace; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .err { color:var(--red); font-size:11px; margin-top:8px; text-align:center; }
+
+  .admin-wrap { max-width:900px; margin:0 auto; padding:20px 14px 60px; }
+  header { background:var(--bg2); border-bottom:1px solid var(--border); padding:14px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+  .header-title { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--green); }
+  .header-sub { font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-top:2px; }
+  .logout-btn { background:none; border:1px solid var(--border2); color:var(--dim); border-radius:6px; padding:5px 12px; cursor:pointer; font-size:11px; font-family:'JetBrains Mono',monospace; }
+
+  .stats-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+  .stat-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; flex:1 1 140px; }
+  .stat-lbl { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px; }
+  .stat-val { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; }
+
+  .section-title { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.12em; margin-bottom:12px; font-weight:600; }
+
+  .tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:16px; }
+  .tab { background:none; border:none; color:var(--muted); padding:10px 16px; cursor:pointer; font-size:11px; font-family:'JetBrains Mono',monospace; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; }
+  .tab.active { color:var(--green); border-bottom-color:var(--green); }
+
+  table { width:100%; border-collapse:collapse; }
+  th { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+  td { font-size:12px; color:var(--dim); padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tr:hover td { background:var(--bg3); }
+  .badge { display:inline-block; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:600; }
+
+  .search-row { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .search-input { background:var(--bg2); border:1px solid var(--border2); border-radius:7px; color:var(--text); padding:8px 12px; font-size:12px; font-family:'JetBrains Mono',monospace; outline:none; flex:1 1 200px; }
+  .search-input:focus { border-color:var(--green); }
+  .filter-select { background:var(--bg2); border:1px solid var(--border2); border-radius:7px; color:var(--text); padding:8px 12px; font-size:12px; font-family:'JetBrains Mono',monospace; outline:none; }
+
+  .export-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--dim); border-radius:6px; padding:7px 14px; cursor:pointer; font-size:11px; font-family:'JetBrains Mono',monospace; }
+  .export-btn:hover { border-color:var(--green); color:var(--green); }
+
+  .empty { color:#333; font-size:12px; text-align:center; padding:40px 0; }
+  .loading-msg { color:var(--muted); font-size:12px; text-align:center; padding:40px 0; letter-spacing:.08em; }
+  .refresh-btn { background:none; border:1px solid var(--border2); color:var(--muted); border-radius:6px; padding:5px 12px; cursor:pointer; font-size:10px; font-family:'JetBrains Mono',monospace; }
+  .refresh-btn:hover { border-color:var(--green); color:var(--green); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-box">
+    <div class="logo">🥷 Ninja Tracker</div>
+    <div class="sub">Admin Panel</div>
+    <div class="field">
+      <label>Admin Key</label>
+      <input type="password" id="admin-key" placeholder="Enter admin key" onkeydown="if(event.key==='Enter')doAdminLogin()"/>
+    </div>
+    <button class="btn" onclick="doAdminLogin()" id="login-btn">Enter</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel" style="display:none">
+  <header>
+    <div>
+      <div class="header-title">🥷 Ninja Tracker Admin</div>
+      <div class="header-sub">Backend: isg-tracker.onrender.com</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+      <button class="logout-btn" onclick="adminLogout()">Log out</button>
+    </div>
+  </header>
+
+  <div class="admin-wrap">
+
+    <!-- STATS -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="stat-lbl">Total Users</div><div class="stat-val" id="stat-users" style="color:var(--green)">—</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Orders</div><div class="stat-val" id="stat-orders" style="color:var(--blue)">—</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total Commission</div><div class="stat-val" id="stat-commission" style="color:var(--yellow)">—</div></div>
+      <div class="stat-card"><div class="stat-lbl">Avg / User</div><div class="stat-val" id="stat-avg" style="color:var(--purple)">—</div></div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" id="tab-users"  onclick="showTab('users')">Users</button>
+      <button class="tab"        id="tab-orders" onclick="showTab('orders')">All Orders</button>
+      <button class="tab"        id="tab-leaderboard" onclick="showTab('leaderboard')">Leaderboard</button>
+    </div>
+
+    <!-- USERS TAB -->
+    <div id="view-users">
+      <div class="search-row">
+        <input class="search-input" id="user-search" placeholder="Search by name or email..." oninput="renderUsers()"/>
+        <button class="export-btn" onclick="exportUsers()">⬇ Export CSV</button>
+      </div>
+      <div id="users-table"></div>
+    </div>
+
+    <!-- ORDERS TAB -->
+    <div id="view-orders" style="display:none">
+      <div class="search-row">
+        <input class="search-input" id="order-search" placeholder="Search by user name, email, or note..." oninput="renderOrders()"/>
+        <select class="filter-select" id="order-type-filter" onchange="renderOrders()">
+          <option value="">All types</option>
+          <option value="new">New Activation</option>
+          <option value="reactivation">Reactivation</option>
+        </select>
+        <button class="export-btn" onclick="exportOrders()">⬇ Export CSV</button>
+      </div>
+      <div id="orders-table"></div>
+    </div>
+
+    <!-- LEADERBOARD TAB -->
+    <div id="view-leaderboard" style="display:none">
+      <div id="leaderboard-content"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API       = "https://isg-tracker.onrender.com";
+const ADMIN_KEY = "ninja2026admin";
+let adminKey    = sessionStorage.getItem("nt_admin_key") || null;
+
+let allUsers  = [];
+let allOrders = [];
+
+function fmt(n){ return "$"+Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
+function fmtDate(ds){ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function doAdminLogin(){
+  const key = document.getElementById("admin-key").value.trim();
+  if (key !== ADMIN_KEY) { document.getElementById("login-err").textContent="Invalid key"; return; }
+  adminKey = key;
+  sessionStorage.setItem("nt_admin_key", key);
+  document.getElementById("login-screen").style.display="none";
+  document.getElementById("admin-panel").style.display="block";
+  loadAll();
+}
+
+function adminLogout(){
+  adminKey=null; sessionStorage.removeItem("nt_admin_key");
+  document.getElementById("login-screen").style.display="flex";
+  document.getElementById("admin-panel").style.display="none";
+}
+
+// ── Load Data ─────────────────────────────────────────────────────────────────
+async function loadAll(){
+  document.getElementById("users-table").innerHTML='<div class="loading-msg">LOADING...</div>';
+  try {
+    const [uRes, oRes] = await Promise.all([
+      fetch(`${API}/admin/users`,  { headers:{"x-admin-key":adminKey} }),
+      fetch(`${API}/admin/orders`, { headers:{"x-admin-key":adminKey} }),
+    ]);
+    allUsers  = await uRes.json();
+    allOrders = await oRes.json();
+    updateStats();
+    renderUsers();
+    renderOrders();
+    renderLeaderboard();
+  } catch(e){
+    document.getElementById("users-table").innerHTML='<div class="empty">Could not load data — check connection</div>';
+  }
+}
+
+function updateStats(){
+  const totalComm = allOrders.reduce((s,o)=>s+(o.commission||0),0);
+  const avgComm   = allUsers.length ? totalComm/allUsers.length : 0;
+  document.getElementById("stat-users").textContent      = allUsers.length;
+  document.getElementById("stat-orders").textContent     = allOrders.length;
+  document.getElementById("stat-commission").textContent = fmt(totalComm);
+  document.getElementById("stat-avg").textContent        = fmt(avgComm);
+}
+
+// ── Users Tab ─────────────────────────────────────────────────────────────────
+function renderUsers(){
+  const q = (document.getElementById("user-search").value||"").toLowerCase();
+  const filtered = allUsers.filter(u=>
+    u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  );
+
+  if (!filtered.length){ document.getElementById("users-table").innerHTML='<div class="empty">No users found</div>'; return; }
+
+  const rows = filtered.map(u=>{
+    const uOrders = allOrders.filter(o=>o.userId===u.id);
+    const comm    = uOrders.reduce((s,o)=>s+(o.commission||0),0);
+    const joined  = new Date(u.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    return `<tr>
+      <td style="color:var(--text);font-weight:600">${u.name}</td>
+      <td style="color:var(--muted)">${u.email}</td>
+      <td style="color:var(--blue)">${uOrders.length}</td>
+      <td style="color:var(--green)">${fmt(comm)}</td>
+      <td style="color:var(--muted)">${joined}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("users-table").innerHTML=`
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Orders</th><th>Commission</th><th>Joined</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Orders Tab ────────────────────────────────────────────────────────────────
+function renderOrders(){
+  const q      = (document.getElementById("order-search").value||"").toLowerCase();
+  const typeF  = document.getElementById("order-type-filter").value;
+
+  const filtered = allOrders.filter(o=>{
+    const user = allUsers.find(u=>u.id===o.userId);
+    const name = user ? user.name.toLowerCase():"";
+    const email= user ? user.email.toLowerCase():"";
+    const note = (o.note||"").toLowerCase();
+    const matchQ = !q || name.includes(q)||email.includes(q)||note.includes(q);
+    const matchT = !typeF || o.type===typeF;
+    return matchQ && matchT;
+  }).sort((a,b)=>b.id-a.id);
+
+  if (!filtered.length){ document.getElementById("orders-table").innerHTML='<div class="empty">No orders found</div>'; return; }
+
+  const rows = filtered.map(o=>{
+    const user  = allUsers.find(u=>u.id===o.userId);
+    const uName = user ? user.name : "Unknown";
+    const color = o.type==="reactivation"?"var(--purple)":"var(--green)";
+    const label = o.type==="reactivation"?"Reactivation":"New Activation";
+    return `<tr>
+      <td style="color:var(--muted)">${fmtDate(o.date)}</td>
+      <td style="color:var(--text);font-weight:600">${uName}</td>
+      <td><span class="badge" style="background:${color}22;border:1px solid ${color}50;color:${color}">${label}</span></td>
+      <td style="color:var(--dim)">${o.regularLines||0}L ${o.homeLines>0?`+${o.homeLines}H`:""}</td>
+      <td style="color:var(--green);font-weight:700">${fmt(o.commission||0)}</td>
+      <td style="color:var(--muted);font-size:10px">${o.note||"—"}</td>
+      <td>${o.source==="extension"?`<span style="color:var(--blue);font-size:10px">auto</span>`:`<span style="color:#333;font-size:10px">manual</span>`}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("orders-table").innerHTML=`
+    <table>
+      <thead><tr><th>Date</th><th>User</th><th>Type</th><th>Lines</th><th>Commission</th><th>Note</th><th>Source</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+function renderLeaderboard(){
+  const byUser = {};
+  allOrders.forEach(o=>{
+    if (!byUser[o.userId]) byUser[o.userId]={orders:0,commission:0};
+    byUser[o.userId].orders++;
+    byUser[o.userId].commission+=(o.commission||0);
+  });
+
+  const ranked = allUsers.map(u=>({
+    ...u,
+    orders:     (byUser[u.id]||{orders:0}).orders,
+    commission: (byUser[u.id]||{commission:0}).commission,
+  })).sort((a,b)=>b.commission-a.commission);
+
+  const medals=["🥇","🥈","🥉"];
+  const rows = ranked.map((u,i)=>`
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:${i===0?"#00e5a008":"var(--bg2)"};border:1px solid ${i===0?"var(--green)":"var(--border)"};border-radius:10px;margin-bottom:8px">
+      <div style="font-size:20px;width:28px;text-align:center">${medals[i]||`#${i+1}`}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:var(--text)">${u.name}</div>
+        <div style="font-size:10px;color:var(--muted)">${u.email}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:${i===0?"var(--green)":"var(--dim)"}">${fmt(u.commission)}</div>
+        <div style="font-size:10px;color:var(--muted)">${u.orders} order${u.orders!==1?"s":""}</div>
+      </div>
+    </div>`).join("");
+
+  document.getElementById("leaderboard-content").innerHTML=ranked.length
+    ? `<div class="section-title">Commission Leaderboard — All Time</div>${rows}`
+    : '<div class="empty">No data yet</div>';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(t){
+  ["users","orders","leaderboard"].forEach(id=>{
+    document.getElementById("view-"+id).style.display=id===t?"block":"none";
+    document.getElementById("tab-"+id).className="tab"+(id===t?" active":"");
+  });
+}
+
+// ── Export CSVs ───────────────────────────────────────────────────────────────
+function exportUsers(){
+  const rows=[["Name","Email","Orders","Commission","Joined"]];
+  allUsers.forEach(u=>{
+    const uOrders=allOrders.filter(o=>o.userId===u.id);
+    const comm=uOrders.reduce((s,o)=>s+(o.commission||0),0);
+    rows.push([u.name,u.email,uOrders.length,comm.toFixed(2),new Date(u.createdAt).toLocaleDateString()]);
+  });
+  downloadCSV(rows,"ninja-tracker-users.csv");
+}
+
+function exportOrders(){
+  const rows=[["Date","User","Email","Type","Lines","Commission","Note","Source"]];
+  [...allOrders].sort((a,b)=>b.id-a.id).forEach(o=>{
+    const user=allUsers.find(u=>u.id===o.userId);
+    rows.push([o.date,user?.name||"",user?.email||"",o.type,
+      (o.regularLines||0)+(o.homeLines||0),(o.commission||0).toFixed(2),
+      o.note||"",o.source||"manual"]);
+  });
+  downloadCSV(rows,"ninja-tracker-orders.csv");
+}
+
+function downloadCSV(rows,filename){
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+  a.download=filename; a.click();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+if (adminKey===ADMIN_KEY){
+  document.getElementById("login-screen").style.display="none";
+  document.getElementById("admin-panel").style.display="block";
+  loadAll();
+}
+</script>
+</body>
+</html>
