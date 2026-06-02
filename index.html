@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Ninja Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg:       #08080a;
+    --bg2:      #0f0f13;
+    --bg3:      #141418;
+    --border:   #1e1e26;
+    --border2:  #2a2a35;
+    --green:    #00e5a0;
+    --blue:     #00b8ff;
+    --purple:   #a78bfa;
+    --orange:   #fb923c;
+    --yellow:   #facc15;
+    --pink:     #f472b6;
+    --red:      #ff6b6b;
+    --text:     #e8e8f0;
+    --muted:    #7a7a8a;
+    --dim:      #9a9aaa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-inner {
+    max-width: 700px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;
+  }
+  .header-label { font-size: 10px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 2px; }
+  .header-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #f0f0f0; letter-spacing: -.02em; }
+  .pills { display: flex; gap: 7px; flex-wrap: wrap; }
+  .pill {
+    border-radius: 8px; padding: 7px 12px; background: var(--bg3);
+    min-width: 80px; text-align: center;
+  }
+  .pill-val { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+  .pill-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-top: 1px; }
+
+  /* SYNC STATUS */
+  .sync-bar {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 5px 16px; display: flex; align-items: center; gap: 8px;
+    font-size: 10px; color: var(--muted); letter-spacing: .06em;
+  }
+  .sync-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .sync-dot.ok    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .sync-dot.error { background: var(--red); }
+
+  /* NAV */
+  nav {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; overflow-x: auto; padding: 0 12px;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  .nav-btn {
+    background: none; border: none; color: var(--muted);
+    padding: 11px 13px; cursor: pointer; font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: .04em; border-bottom: 2px solid transparent;
+    transition: all .15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .nav-btn.active { color: var(--green); border-bottom-color: var(--green); }
+
+  /* MAIN */
+  main { max-width: 700px; margin: 0 auto; padding: 14px 12px 80px; }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+
+  /* CARDS */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 15px;
+  }
+  .card.glow { border-color: #00e5a025; box-shadow: 0 0 0 1px #00e5a010; }
+  .card-title {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); margin-bottom: 12px; font-weight: 600;
+  }
+
+  /* FORM ELEMENTS */
+  .field { display: flex; flex-direction: column; gap: 5px; flex: 1 1 140px; }
+  .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .lbl span { color: var(--dim); font-weight: 400; }
+  input, select, textarea {
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 6px; color: var(--text); padding: 8px 10px;
+    font-size: 13px; font-family: 'JetBrains Mono', monospace;
+    outline: none; width: 100%;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--green); }
+  textarea { resize: vertical; min-height: 60px; }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .divider { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .sec-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; font-weight: 600; }
+  .sec-lbl span { color: var(--dim); font-weight: 400; }
+
+  /* TYPE TOGGLE */
+  .type-row { display: flex; gap: 8px; }
+  .type-btn {
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--dim);
+    border-radius: 7px; padding: 9px 16px; cursor: pointer;
+    font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    transition: all .15s; flex: 1;
+  }
+  .type-btn.new-on    { background: #00e5a015; color: var(--green); border-color: #00e5a040; }
+  .type-btn.react-on  { background: #a78bfa20; color: var(--purple); border-color: #a78bfa50; }
+  .info-box {
+    margin-top: 8px; font-size: 11px; color: var(--purple);
+    background: #a78bfa0d; border: 1px solid #a78bfa20;
+    border-radius: 6px; padding: 6px 10px;
+  }
+  .line-note { margin-top: 8px; font-size: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* TOGGLE BUTTONS */
+  .toggle-btn {
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--dim);
+    border-radius: 7px; padding: 10px 16px; cursor: pointer;
+    font-size: 12px; font-family: 'JetBrains Mono', monospace;
+    transition: all .15s; flex: 1;
+  }
+  .toggle-btn.on { background: #facc1512; color: var(--yellow); border-color: #facc1538; }
+
+  /* SUBMIT ROW */
+  .submit-row {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .commission-val {
+    font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800;
+    letter-spacing: -.03em; transition: color .2s;
+  }
+  .breakdown { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
+  .breakdown span { font-size: 10px; }
+
+  /* BUTTONS */
+  .btn-primary {
+    background: var(--green); color: #08080a; border: none;
+    border-radius: 8px; padding: 10px 22px; font-weight: 700;
+    font-size: 13px; cursor: pointer; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: .03em; white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .btn-primary:disabled { opacity: .3; cursor: not-allowed; }
+  .btn-ghost {
+    background: none; border: 1px solid var(--border2); color: var(--dim);
+    border-radius: 6px; padding: 5px 11px; cursor: pointer;
+    font-size: 11px; font-family: 'JetBrains Mono', monospace; white-space: nowrap;
+  }
+  .btn-edit {
+    background: #00b8ff12; border: 1px solid #00b8ff35; color: var(--blue);
+    border-radius: 5px; padding: 3px 10px; cursor: pointer;
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+  }
+  .btn-danger {
+    background: #ff6b6b10; border: 1px solid #ff6b6b35; color: var(--red);
+    border-radius: 5px; padding: 4px 10px; cursor: pointer;
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+  }
+  .btn-del {
+    background: none; border: none; color: #333;
+    cursor: pointer; font-size: 13px; padding: 0 3px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* EDIT BANNER */
+  .edit-banner {
+    background: #facc1510; border: 1px solid #facc1530; border-radius: 8px;
+    padding: 10px 14px; display: flex; justify-content: space-between;
+    align-items: center; font-size: 11px; color: var(--yellow);
+  }
+
+  /* TAGS */
+  .tag {
+    border-radius: 4px; padding: 2px 7px; font-size: 10px;
+    font-weight: 600; white-space: nowrap; display: inline-block;
+  }
+
+  /* DAY BLOCKS */
+  .day-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .day-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 14px; background: var(--bg3); border-bottom: 1px solid var(--border);
+  }
+  .day-lbl { font-size: 11px; color: var(--dim); letter-spacing: .05em; }
+  .day-total { font-size: 13px; font-weight: 700; color: var(--green); }
+  .order-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 11px 14px; border-bottom: 1px solid #0d0d10; gap: 10px;
+  }
+  .order-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 4px; align-items: center; }
+  .order-bd   { display: flex; gap: 7px; flex-wrap: wrap; }
+  .order-bd span { font-size: 10px; }
+  .order-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .order-amt { font-size: 16px; font-weight: 700; color: var(--text); }
+
+  /* WEEK CARDS */
+  .week-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .week-range { font-size: 13px; font-weight: 700; color: #e0e0e8; letter-spacing: -.01em; }
+  .week-badge {
+    font-size: 9px; background: #00e5a010; color: var(--green);
+    border: 1px solid #00e5a020; border-radius: 4px; padding: 2px 6px;
+    letter-spacing: .06em; text-transform: uppercase; display: inline-block; margin-top: 3px;
+  }
+  .week-earned { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--green); }
+  .pc-compare {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    background: #0d0d10; border-radius: 8px;
+    padding: 11px 13px; margin-bottom: 10px; align-items: flex-end;
+  }
+  .pc-compare-item { flex: 1 1 80px; }
+  .pc-val { font-size: 17px; font-weight: 700; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+  .bar-lbl { font-size: 10px; color: var(--muted); width: 88px; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 4px; background: #1a1a22; border-radius: 2px; overflow: hidden; }
+  .bar-fill  { height: 100%; background: var(--green); border-radius: 2px; transition: width .4s ease; }
+
+  /* PAYCHECK ROWS */
+  .pc-row {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 13px 14px;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+
+  /* STATS GRID */
+  .stats-grid { display: flex; gap: 0; overflow: hidden; }
+  .stat-item { flex: 1 1 70px; padding: 11px 10px; border-right: 1px solid var(--border); min-width: 0; }
+  .stat-val { font-size: 14px; font-weight: 700; color: var(--text); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stat-sub { font-size: 9px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* GOAL BAR */
+  .goal-bar-track { height: 8px; background: #161620; border-radius: 4px; overflow: hidden; margin-top: 2px; }
+  .goal-bar-fill  { height: 100%; border-radius: 4px; transition: width .5s ease; }
+  .pace-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .pace-item { flex: 1 1 90px; background: #0d0d10; border-radius: 8px; padding: 10px 12px; }
+
+  /* TOTALS ROW */
+  .totals-row { display: flex; gap: 0; overflow: hidden; }
+  .total-item { flex: 1 1 100px; padding: 13px 14px; border-right: 1px solid var(--border); }
+  .total-val { font-size: 17px; font-weight: 700; margin-top: 3px; }
+
+  /* TYPE BREAKDOWN */
+  .type-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+  .type-card { flex: 1 1 130px; background: #0d0d10; border-radius: 8px; padding: 12px 14px; }
+  .type-label { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .type-count { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); }
+  .type-earned { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .type-bar { margin-top: 8px; height: 3px; background: #1e1e28; border-radius: 2px; }
+
+  /* WEEK VS GOAL */
+  .wvg-row { margin-bottom: 9px; }
+  .wvg-head { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 11px; }
+  .wvg-track { height: 4px; background: #161620; border-radius: 2px; overflow: hidden; }
+  .wvg-fill  { height: 100%; border-radius: 2px; transition: width .4s; }
+
+  /* MONTHLY */
+  .month-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .month-lbl { font-size: 11px; color: var(--dim); width: 70px; flex-shrink: 0; }
+  .month-bar-track { flex: 1; height: 4px; background: #161620; border-radius: 2px; overflow: hidden; }
+  .month-bar-fill  { height: 100%; border-radius: 2px; }
+  .month-val { font-size: 11px; font-weight: 700; color: var(--text); min-width: 55px; text-align: right; flex-shrink: 0; }
+
+  /* CHART */
+  .chart-wrap { position: relative; height: 160px; margin-top: 4px; }
+
+  .empty { color: #333; font-size: 12px; text-align: center; padding: 40px 0; letter-spacing: .04em; }
+
+  /* LOADING */
+  .loading {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--muted); letter-spacing: .1em;
+    z-index: 999; transition: opacity .3s;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px;
+    padding: 10px 18px; font-size: 11px; color: var(--dim);
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">CONNECTING...</div>
+<div class="toast" id="toast"></div>
+
+<header class="header">
+  <div class="header-inner">
+    <div>
+      <div class="header-label">Commission Tracker</div>
+      <div class="header-title">Ninja Tracker</div>
+    </div>
+    <div class="pills">
+      <div class="pill" style="border:1px solid #00e5a028">
+        <div class="pill-val" style="color:var(--green)" id="pill-week">$0.00</div>
+        <div class="pill-lbl">This Week</div>
+      </div>
+      <div class="pill" style="border:1px solid #00b8ff28">
+        <div class="pill-val" style="color:var(--blue)" id="pill-total">$0.00</div>
+        <div class="pill-lbl">All Time</div>
+      </div>
+      <div class="pill" style="border:1px solid #55555528">
+        <div class="pill-val" id="pill-diff">+$0.00</div>
+        <div class="pill-lbl">Difference</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="sync-bar">
+  <div class="sync-dot" id="sync-dot"></div>
+  <span id="sync-text">CONNECTING TO BACKEND...</span>
+</div>
+
+<nav>
+  <button class="nav-btn active" onclick="showView('order')">New Order</button>
+  <button class="nav-btn" onclick="showView('history')">History</button>
+  <button class="nav-btn" onclick="showView('week')">Weekly</button>
+  <button class="nav-btn" onclick="showView('paycheck')">Paychecks</button>
+  <button class="nav-btn" onclick="showView('goals')">Goals</button>
+</nav>
+
+<main>
+  <!-- ORDER BUILDER -->
+  <div id="view-order" class="col">
+    <div id="edit-banner" class="edit-banner" style="display:none">
+      <span>✏️ Editing order — make changes then save</span>
+      <button class="btn-danger" onclick="cancelEdit()">Cancel</button>
+    </div>
+    <div class="card">
+      <div class="card-title" id="ob-title">Build Order</div>
+      <div class="row" style="margin-bottom:4px">
+        <div class="field" style="flex:0 0 150px">
+          <label class="lbl">Date</label>
+          <input type="date" id="ob-date"/>
+        </div>
+      </div>
+
+      <div class="divider">
+        <div class="sec-lbl">Order Type</div>
+        <div class="type-row">
+          <button class="type-btn new-on" id="btn-new" onclick="setType('new')">New Activation</button>
+          <button class="type-btn" id="btn-react" onclick="setType('reactivation')">Reactivation</button>
+        </div>
+        <div class="info-box" id="react-info" style="display:none">Every line = $10.00 flat on reactivations</div>
+      </div>
+
+      <div class="divider">
+        <div class="sec-lbl">Lines</div>
+        <div class="row">
+          <div class="field">
+            <label class="lbl">Regular Lines</label>
+            <select id="ob-lines" onchange="updateCalc()">
+              <option value="0">None</option>
+              <option value="1">1 line</option><option value="2">2 lines</option>
+              <option value="3">3 lines</option><option value="4">4 lines</option>
+              <option value="5">5 lines</option><option value="6">6 lines</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">Home Phone Lines <span>($15 each)</span></label>
+            <select id="ob-home" onchange="updateCalc()">
+              <option value="0">None</option>
+              <option value="1">1 line</option><option value="2">2 lines</option>
+              <option value="3">3 lines</option><option value="4">4 lines</option>
+              <option value="5">5 lines</option><option value="6">6 lines</option>
+            </select>
+          </div>
+        </div>
+        <div class="line-note" id="line-note"></div>
+      </div>
+
+      <div class="divider">
+        <div class="sec-lbl">Account Add-ons <span>· $1 per account</span></div>
+        <div class="row">
+          <button class="toggle-btn" id="tog-aarp" onclick="toggleAcct('aarp')">+ AARP</button>
+          <button class="toggle-btn" id="tog-autopay" onclick="toggleAcct('autopay')">+ Autopay</button>
+        </div>
+      </div>
+
+      <div class="divider">
+        <div class="sec-lbl">Device Add-ons <span>· $1 per unit</span></div>
+        <div class="row">
+          <div class="field">
+            <label class="lbl">New Devices</label>
+            <select id="ob-device" onchange="updateCalc()">
+              <option value="0">None</option>
+              <option value="1">1</option><option value="2">2</option>
+              <option value="3">3</option><option value="4">4</option>
+              <option value="5">5</option><option value="6">6</option>
+            </select>
+          </div>
+          <div class="field" id="protection-field">
+            <label class="lbl">Protection Plan <span>(needs device)</span></label>
+            <select id="ob-protection" onchange="updateCalc()" disabled>
+              <option value="0">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div class="field">
+            <label class="lbl">Accessories <span>· $1 each</span></label>
+            <input type="number" id="ob-accessories" min="0" max="99" placeholder="0" oninput="updateCalc()"/>
+          </div>
+          <div class="field">
+            <label class="lbl">IRIS Ally <span>· $10 each</span></label>
+            <select id="ob-iris" onchange="updateCalc()">
+              <option value="0">None</option>
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+              <option value="4">4</option><option value="5">5</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider">
+        <div class="sec-lbl">Order Note <span>· optional</span></div>
+        <input type="text" id="ob-note" placeholder="e.g. order #4821"/>
+      </div>
+
+      <div class="submit-row">
+        <div>
+          <div class="lbl">Commission</div>
+          <div class="commission-val" id="ob-commission" style="color:#333">$0.00</div>
+          <div class="breakdown" id="ob-breakdown"></div>
+        </div>
+        <button class="btn-primary" id="submit-btn" onclick="submitOrder()" disabled>Submit Order</button>
+      </div>
+    </div>
+    <div class="card" id="today-card" style="display:none;background:#0d0d10">
+      <div class="card-title">Today</div>
+      <div class="row">
+        <div><div class="lbl">Orders</div><div id="today-count" style="font-size:22px;font-weight:700;color:var(--dim)"></div></div>
+        <div><div class="lbl">Earned</div><div id="today-total" style="font-size:22px;font-weight:700;color:var(--green)"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="view-history" class="col" style="display:none">
+    <div id="history-content"></div>
+  </div>
+
+  <!-- WEEKLY -->
+  <div id="view-week" class="col" style="display:none">
+    <div id="week-content"></div>
+  </div>
+
+  <!-- PAYCHECKS -->
+  <div id="view-paycheck" class="col" style="display:none">
+    <div class="card">
+      <div class="card-title" id="pc-form-title">Log Paycheck Received</div>
+      <div class="row">
+        <div class="field">
+          <label class="lbl">Week of (Monday)</label>
+          <input type="date" id="pc-weekstart"/>
+        </div>
+        <div class="field">
+          <label class="lbl">Amount Received</label>
+          <input type="number" id="pc-amount" min="0" step="0.01" placeholder="0.00"/>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn-primary" onclick="savePaycheck()">Save</button>
+        <button class="btn-ghost" id="pc-cancel" style="display:none" onclick="cancelPcEdit()">Cancel</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="totals-row" id="pc-totals"></div>
+    </div>
+    <div id="pc-list"></div>
+  </div>
+
+  <!-- GOALS -->
+  <div id="view-goals" class="col" style="display:none">
+    <div id="goals-content"></div>
+  </div>
+</main>
+
+<script>
+const API = "https://isg-tracker.onrender.com";
+
+// ── State ────────────────────────────────────────────────────────────────────
+let orders    = [];
+let paychecks = [];
+let editingId = null;
+let editingPc = null;
+let obType    = "new";
+let obAcct    = { aarp:false, autopay:false };
+let weekGoal  = localStorage.getItem("weekGoal")  || "";
+let monthGoal = localStorage.getItem("monthGoal") || "";
+let weekChart = null;
+let monthChart= null;
+
+// ── Rates ────────────────────────────────────────────────────────────────────
+const R = { newLine1:25, newLineN:15, reactivation:10, homeLine:15 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n){ return "$"+Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
+function today(){ return new Date().toISOString().split("T")[0]; }
+function getWeekStart(ds){
+  const d=new Date(ds+"T12:00:00"),day=d.getDay();
+  return new Date(d.setDate(d.getDate()-day+(day===0?-6:1))).toISOString().split("T")[0];
+}
+function weekLabel(ws){
+  const s=new Date(ws+"T12:00:00"),e=new Date(s); e.setDate(e.getDate()+6);
+  return `${s.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${e.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
+}
+function fmtDate(ds){ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }
+function monthKey(ds){ return ds.slice(0,7); }
+function monthLabel(mk){
+  const[y,m]=mk.split("-");
+  return new Date(+y,+m-1,1).toLocaleDateString("en-US",{month:"short",year:"2-digit"});
+}
+function showToast(msg,dur=2500){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),dur);
+}
+
+// ── Commission ────────────────────────────────────────────────────────────────
+function calcCommission(o){
+  const{type,regularLines,homeLines,perAccount,perDevice}=o;
+  let t=0;
+  if(type==="reactivation"){ t+=(regularLines+homeLines)*R.reactivation; }
+  else{
+    if(regularLines>=1) t+=R.newLine1;
+    if(regularLines>=2) t+=(regularLines-1)*R.newLineN;
+    t+=homeLines*R.homeLine;
+  }
+  if(perAccount.aarp)    t+=1;
+  if(perAccount.autopay) t+=1;
+  t+=(perDevice.device||0)*1;
+  t+=(perDevice.protection||0)*1;
+  t+=(perDevice.accessories||0)*1;
+  t+=(perDevice.irisAlly||0)*10;
+  return t;
+}
+
+function buildBreakdown(o){
+  const{type,regularLines,homeLines,perAccount,perDevice}=o;
+  const items=[];
+  if(type==="reactivation"){
+    const l=regularLines+homeLines;
+    if(l>0) items.push({label:`Reactivation (${l}L)`,amt:l*R.reactivation,color:"var(--purple)"});
+  } else {
+    if(regularLines>=1) items.push({label:"1st line",amt:R.newLine1,color:"var(--green)"});
+    if(regularLines>=2) items.push({label:`+${regularLines-1}L`,amt:(regularLines-1)*R.newLineN,color:"var(--blue)"});
+    if(homeLines>0) items.push({label:`Home×${homeLines}`,amt:homeLines*R.homeLine,color:"var(--orange)"});
+  }
+  if(perAccount.aarp)    items.push({label:"AARP",amt:1,color:"var(--yellow)"});
+  if(perAccount.autopay) items.push({label:"Autopay",amt:1,color:"var(--yellow)"});
+  if((perDevice.device||0)>0)       items.push({label:`Device×${perDevice.device}`,amt:perDevice.device,color:"var(--pink)"});
+  if((perDevice.protection||0)>0)   items.push({label:`Protection×${perDevice.protection}`,amt:perDevice.protection,color:"var(--pink)"});
+  if((perDevice.accessories||0)>0)  items.push({label:`Accessories×${perDevice.accessories}`,amt:perDevice.accessories,color:"var(--pink)"});
+  if((perDevice.irisAlly||0)>0)     items.push({label:`Iris Ally×${perDevice.irisAlly}`,amt:(perDevice.irisAlly)*10,color:"var(--orange)"});
+  return items;
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function loadData(){
+  try {
+    const r = await fetch(`${API}/data`);
+    const d = await r.json();
+    orders    = d.orders    || [];
+    paychecks = d.paychecks || [];
+    setSyncStatus(true);
+    updateAll();
+  } catch(e){
+    setSyncStatus(false);
+    showToast("⚠ Backend offline — check Render");
+  }
+  document.getElementById("loading").style.opacity="0";
+  setTimeout(()=>document.getElementById("loading").style.display="none",400);
+}
+
+function setSyncStatus(ok){
+  const dot=document.getElementById("sync-dot");
+  const txt=document.getElementById("sync-text");
+  dot.className="sync-dot "+(ok?"ok":"error");
+  txt.textContent=ok?"LIVE — orders sync automatically":"OFFLINE — check render.com";
+}
+
+async function apiPost(path,body){
+  const r=await fetch(`${API}${path}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  return r.json();
+}
+async function apiDelete(path){
+  const r=await fetch(`${API}${path}`,{method:"DELETE"});
+  return r.json();
+}
+
+// ── Order Builder ─────────────────────────────────────────────────────────────
+function setType(t){
+  obType=t;
+  document.getElementById("btn-new").className  ="type-btn"+(t==="new"?" new-on":"");
+  document.getElementById("btn-react").className="type-btn"+(t==="reactivation"?" react-on":"");
+  document.getElementById("react-info").style.display=t==="reactivation"?"block":"none";
+  updateCalc();
+}
+
+function toggleAcct(id){
+  obAcct[id]=!obAcct[id];
+  const btn=document.getElementById("tog-"+id);
+  btn.className="toggle-btn"+(obAcct[id]?" on":"");
+  btn.textContent=(obAcct[id]?"✓ ":"+ ")+(id==="aarp"?"AARP":"Autopay");
+  updateCalc();
+}
+
+function updateCalc(){
+  const lines    = parseInt(document.getElementById("ob-lines").value)||0;
+  const home     = parseInt(document.getElementById("ob-home").value)||0;
+  const device   = parseInt(document.getElementById("ob-device").value)||0;
+  const accInput = parseInt(document.getElementById("ob-accessories").value)||0;
+
+  // Update protection dropdown max
+  const protSel = document.getElementById("ob-protection");
+  const curProt = parseInt(protSel.value)||0;
+  protSel.innerHTML='<option value="0">None</option>';
+  for(let i=1;i<=device;i++) protSel.innerHTML+=`<option value="${i}">${i}</option>`;
+  protSel.value=Math.min(curProt,device);
+  protSel.disabled=device===0;
+  document.getElementById("protection-field").style.opacity=device===0?"0.35":"1";
+
+  const prot = parseInt(protSel.value)||0;
+
+  const order = {
+    type: obType, regularLines:lines, homeLines:home,
+    perAccount:{...obAcct},
+    perDevice:{device,protection:prot,accessories:accInput}
+  };
+  const comm = calcCommission(order);
+  const bd   = buildBreakdown(order);
+
+  const valid = lines>0||home>0;
+  const commEl = document.getElementById("ob-commission");
+  commEl.textContent = fmt(comm);
+  commEl.style.color = valid?"var(--green)":"#333";
+
+  document.getElementById("ob-breakdown").innerHTML =
+    bd.map(b=>`<span style="color:${b.color}">${b.label} ${fmt(b.amt)}</span>`).join("");
+
+  document.getElementById("submit-btn").disabled=!valid;
+
+  // Line note
+  let note="";
+  if(valid && obType==="new"){
+    if(lines>=1) note+=`<span style="color:var(--green)">1st ${fmt(R.newLine1)}`;
+    if(lines>=2) note+=` · +${lines-1}×${fmt(R.newLineN)}</span>`;
+    else note+="</span>";
+    if(home>0) note+=`<span style="color:var(--orange)"> · ${home} home×${fmt(R.homeLine)}</span>`;
+  } else if(valid && obType==="reactivation"){
+    note=`<span style="color:var(--purple)">${lines+home} lines×${fmt(R.reactivation)}</span>`;
+  }
+  document.getElementById("line-note").innerHTML=note;
+
+  // Today card
+  updateTodayCard();
+}
+
+async function submitOrder(){
+  const dateVal = document.getElementById("ob-date").value;
+  const lines   = parseInt(document.getElementById("ob-lines").value)||0;
+  const home    = parseInt(document.getElementById("ob-home").value)||0;
+  const device  = parseInt(document.getElementById("ob-device").value)||0;
+  const prot    = parseInt(document.getElementById("ob-protection").value)||0;
+  const acc     = parseInt(document.getElementById("ob-accessories").value)||0;
+  const iris    = parseInt(document.getElementById("ob-iris").value)||0;
+  const note    = document.getElementById("ob-note").value;
+
+  if(lines===0&&home===0) return;
+
+  const order = {
+    date:dateVal, note, type:obType,
+    regularLines:lines, homeLines:home,
+    perAccount:{...obAcct},
+    perDevice:{device,protection:prot,accessories:acc,irisAlly:iris},
+  };
+  order.commission = calcCommission(order);
+  order.breakdown  = buildBreakdown(order);
+
+  try {
+    if(editingId){
+      await fetch(`${API}/orders/${editingId}`,{
+        method:"PUT",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(order)
+      });
+      showToast("✓ Order updated");
+    } else {
+      await apiPost("/orders",order);
+      showToast("✓ Order logged");
+    }
+    await loadData();
+    resetBuilder();
+  } catch(e){ showToast("⚠ Could not save — check connection"); }
+}
+
+function resetBuilder(){
+  editingId=null;
+  obAcct={aarp:false,autopay:false};
+  obType="new";
+  document.getElementById("ob-date").value=today();
+  document.getElementById("ob-lines").value="0";
+  document.getElementById("ob-home").value="0";
+  document.getElementById("ob-device").value="0";
+  document.getElementById("ob-accessories").value="";
+  document.getElementById("ob-note").value="";
+  document.getElementById("tog-aarp").className="toggle-btn";
+  document.getElementById("tog-aarp").textContent="+ AARP";
+  document.getElementById("tog-autopay").className="toggle-btn";
+  document.getElementById("tog-autopay").textContent="+ Autopay";
+  setType("new");
+  document.getElementById("edit-banner").style.display="none";
+  document.getElementById("ob-title").textContent="Build Order";
+  document.getElementById("submit-btn").textContent="Submit Order";
+  updateCalc();
+}
+
+function startEdit(id){
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  editingId=id;
+  obType=o.type; obAcct={...o.perAccount};
+  document.getElementById("ob-date").value=o.date;
+  document.getElementById("ob-lines").value=o.regularLines;
+  document.getElementById("ob-home").value=o.homeLines;
+  document.getElementById("ob-device").value=o.perDevice.device||0;
+  document.getElementById("ob-accessories").value=o.perDevice.accessories||0;
+  document.getElementById("ob-note").value=o.note||"";
+  setType(o.type);
+  if(o.perAccount.aarp)    toggleAcct("aarp");
+  if(o.perAccount.autopay) toggleAcct("autopay");
+  document.getElementById("ob-protection").value=o.perDevice.protection||0;
+  document.getElementById("edit-banner").style.display="flex";
+  document.getElementById("ob-title").textContent="Edit Order";
+  document.getElementById("submit-btn").textContent="Save Changes";
+  showView("order");
+  window.scrollTo(0,0);
+  updateCalc();
+}
+
+function cancelEdit(){ resetBuilder(); }
+
+// ── Today Card ────────────────────────────────────────────────────────────────
+function updateTodayCard(){
+  const d=document.getElementById("ob-date").value||today();
+  const todayOrders=orders.filter(o=>o.date===d);
+  const card=document.getElementById("today-card");
+  if(todayOrders.length>0&&!editingId){
+    card.style.display="block";
+    document.getElementById("today-count").textContent=todayOrders.length;
+    document.getElementById("today-total").textContent=fmt(todayOrders.reduce((s,o)=>s+o.commission,0));
+  } else { card.style.display="none"; }
+}
+
+// ── Weekly Data ───────────────────────────────────────────────────────────────
+function getWeeklyData(){
+  const weeks={};
+  orders.forEach(o=>{
+    const ws=getWeekStart(o.date);
+    if(!weeks[ws]) weeks[ws]={orders:[],earned:0};
+    weeks[ws].orders.push(o); weeks[ws].earned+=o.commission;
+  });
+  paychecks.forEach(p=>{
+    if(!weeks[p.weekStart]) weeks[p.weekStart]={orders:[],earned:0};
+    weeks[p.weekStart].paid=Number(p.amount);
+  });
+  return weeks;
+}
+
+function getMonthlyData(){
+  const months={};
+  orders.forEach(o=>{
+    const mk=monthKey(o.date);
+    if(!months[mk]) months[mk]={earned:0,count:0};
+    months[mk].earned+=o.commission; months[mk].count++;
+  });
+  return months;
+}
+
+// ── Header Pills ──────────────────────────────────────────────────────────────
+function updatePills(){
+  const wd=getWeeklyData();
+  const cw=wd[getWeekStart(today())]||{earned:0};
+  const totalEarned=orders.reduce((s,o)=>s+o.commission,0);
+  const totalPaid=paychecks.reduce((s,p)=>s+Number(p.amount),0);
+  const delta=totalEarned-totalPaid;
+
+  document.getElementById("pill-week").textContent=fmt(cw.earned);
+  document.getElementById("pill-total").textContent=fmt(totalEarned);
+  const pd=document.getElementById("pill-diff");
+  pd.textContent=(delta>=0?"+":"")+fmt(delta);
+  pd.style.color=delta<-0.01?"var(--red)":delta>0.01?"var(--green)":"var(--muted)";
+  document.getElementById("pill-diff").closest(".pill").style.borderColor=
+    delta<-0.01?"#ff6b6b28":delta>0.01?"#00e5a028":"#55555528";
+}
+
+// ── Views ─────────────────────────────────────────────────────────────────────
+function showView(v){
+  ["order","history","week","paycheck","goals"].forEach(id=>{
+    document.getElementById("view-"+id).style.display=id===v?"flex":"none";
+  });
+  document.querySelectorAll(".nav-btn").forEach((b,i)=>{
+    const ids=["order","history","week","paycheck","goals"];
+    b.className="nav-btn"+(ids[i]===v?" active":"");
+  });
+  if(v==="history")  renderHistory();
+  if(v==="week")     renderWeekly();
+  if(v==="paycheck") renderPaychecks();
+  if(v==="goals")    renderGoals();
+}
+
+// ── Render History ────────────────────────────────────────────────────────────
+function renderHistory(){
+  const el=document.getElementById("history-content");
+  if(!orders.length){ el.innerHTML='<div class="empty">No orders yet.</div>'; return; }
+
+  const byDay={};
+  orders.forEach(o=>{ if(!byDay[o.date]) byDay[o.date]=[]; byDay[o.date].push(o); });
+  const days=Object.keys(byDay).sort((a,b)=>b.localeCompare(a));
+
+  el.innerHTML=days.map(day=>{
+    const dos=byDay[day];
+    const dt=dos.reduce((s,o)=>s+o.commission,0);
+    return `<div class="day-block" style="margin-bottom:12px">
+      <div class="day-head">
+        <span class="day-lbl">${fmtDate(day)}</span>
+        <span class="day-total">${fmt(dt)}</span>
+      </div>
+      ${dos.map(o=>`
+        <div class="order-row">
+          <div style="flex:1">
+            <div class="order-tags">
+              <span class="tag" style="background:${o.type==="reactivation"?"#a78bfa22":"#00e5a022"};border:1px solid ${o.type==="reactivation"?"#a78bfa50":"#00e5a050"};color:${o.type==="reactivation"?"var(--purple)":"var(--green)"}">${o.type==="reactivation"?"Reactivation":"New Activation"}</span>
+              ${o.regularLines>0?`<span class="tag" style="background:#00b8ff22;border:1px solid #00b8ff50;color:var(--blue)">${o.regularLines} line${o.regularLines>1?"s":""}</span>`:""}
+              ${o.homeLines>0?`<span class="tag" style="background:#fb923c22;border:1px solid #fb923c50;color:var(--orange)">${o.homeLines} home</span>`:""}
+              ${o.perAccount&&o.perAccount.aarp?`<span class="tag" style="background:#facc1522;border:1px solid #facc1550;color:var(--yellow)">AARP</span>`:""}
+              ${o.perAccount&&o.perAccount.autopay?`<span class="tag" style="background:#facc1522;border:1px solid #facc1550;color:var(--yellow)">Autopay</span>`:""}
+              ${(o.perDevice&&o.perDevice.device||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.device} device${o.perDevice.device>1?"s":""}</span>`:""}
+              ${(o.perDevice&&o.perDevice.protection||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.protection} protection</span>`:""}
+              ${(o.perDevice&&o.perDevice.accessories||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.accessories} accessories</span>`:""}
+              ${o.source==="extension"?`<span class="tag" style="background:#00b8ff10;border:1px solid #00b8ff30;color:var(--blue)">auto</span>`:""}
+              ${o.note?`<span style="font-size:10px;color:var(--muted);font-style:italic">${o.note}</span>`:""}
+            </div>
+            <div class="order-bd">
+              ${(o.breakdown||[]).map(b=>`<span style="color:${b.color}">${b.label} ${fmt(b.amt)}</span>`).join("")}
+            </div>
+          </div>
+          <div class="order-actions">
+            <div class="order-amt">${fmt(o.commission)}</div>
+            <button class="btn-edit" onclick="startEdit(${o.id})">Edit</button>
+            <button class="btn-del" onclick="confirmDelete(${o.id},this)">✕</button>
+          </div>
+        </div>`).join("")}
+    </div>`;
+  }).join("");
+}
+
+let deleteConfirm=null;
+function confirmDelete(id,btn){
+  if(deleteConfirm===id){
+    deleteOrder(id);
+  } else {
+    if(deleteConfirm) document.querySelectorAll(".del-confirm").forEach(e=>e.remove());
+    deleteConfirm=id;
+    const row=document.createElement("div");
+    row.className="del-confirm";
+    row.style.cssText="display:flex;gap:5px;margin-top:3px";
+    row.innerHTML=`<button class="btn-danger" onclick="deleteOrder(${id})">Delete</button><button class="btn-ghost" onclick="cancelDelete()">No</button>`;
+    btn.parentNode.appendChild(row);
+  }
+}
+function cancelDelete(){ deleteConfirm=null; document.querySelectorAll(".del-confirm").forEach(e=>e.remove()); }
+async function deleteOrder(id){
+  try{
+    await apiDelete(`/orders/${id}`);
+    await loadData();
+    showToast("Order deleted");
+    cancelDelete();
+  } catch(e){ showToast("⚠ Could not delete"); }
+}
+
+// ── Render Weekly ─────────────────────────────────────────────────────────────
+function renderWeekly(){
+  const el=document.getElementById("week-content");
+  const wd=getWeeklyData();
+  const ws=Object.keys(wd).sort((a,b)=>b.localeCompare(a));
+  if(!ws.length){ el.innerHTML='<div class="empty">No data yet.</div>'; return; }
+
+  const cw=getWeekStart(today());
+  el.innerHTML=ws.map(w=>{
+    const wk=wd[w];
+    const paid=wk.paid!=null?wk.paid:null;
+    const delta=paid!=null?wk.earned-paid:null;
+    const isNow=w===cw;
+    const dayMap={};
+    (wk.orders||[]).forEach(o=>{ dayMap[o.date]=(dayMap[o.date]||0)+o.commission; });
+    const maxDay=Math.max(...Object.values(dayMap),1);
+
+    return `<div class="card${isNow?" glow":""}" style="margin-bottom:12px">
+      <div class="week-head">
+        <div>
+          <div class="week-range">${weekLabel(w)}</div>
+          ${isNow?`<span class="week-badge">Current Week</span>`:""}
+        </div>
+        <div class="week-earned">${fmt(wk.earned)}</div>
+      </div>
+      <div class="pc-compare">
+        <div class="pc-compare-item">
+          <div class="lbl">Expected</div>
+          <div class="pc-val" style="color:var(--green)">${fmt(wk.earned)}</div>
+        </div>
+        <div class="pc-compare-item" style="border-left:1px solid var(--border);padding-left:14px">
+          <div class="lbl">Received</div>
+          <div class="pc-val" style="color:${paid!=null?"var(--blue)":"#444"}">${paid!=null?fmt(paid):"—"}</div>
+        </div>
+        ${delta!=null?`<div class="pc-compare-item" style="border-left:1px solid var(--border);padding-left:14px">
+          <div class="lbl">Diff</div>
+          <div class="pc-val" style="color:${delta<-0.01?"var(--red)":delta>0.01?"var(--green)":"var(--muted)"}">${(delta>=0?"+":"")+fmt(delta)}</div>
+        </div>`:""}
+        ${paid==null?`<button class="btn-ghost" style="font-size:10px;align-self:flex-end" onclick="showView('paycheck')">+ Log Paycheck</button>`:""}
+      </div>
+      ${Object.keys(dayMap).length?`<div style="margin-top:10px">
+        <div class="lbl" style="margin-bottom:7px">Daily</div>
+        ${Object.keys(dayMap).sort().map(d=>`
+          <div class="bar-row">
+            <span class="bar-lbl">${fmtDate(d)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${(dayMap[d]/maxDay)*100}%"></div></div>
+            <span style="font-size:10px;color:var(--muted);width:46px;text-align:right;flex-shrink:0">${fmt(dayMap[d])}</span>
+          </div>`).join("")}
+      </div>`:""}
+      <div style="font-size:10px;color:#444;margin-top:8px">${(wk.orders||[]).length} order${(wk.orders||[]).length!==1?"s":""}</div>
+    </div>`;
+  }).join("");
+}
+
+// ── Render Paychecks ──────────────────────────────────────────────────────────
+function renderPaychecks(){
+  const wd=getWeeklyData();
+  const totalEarned=orders.reduce((s,o)=>s+o.commission,0);
+  const totalPaid=paychecks.reduce((s,p)=>s+Number(p.amount),0);
+  const delta=totalEarned-totalPaid;
+
+  document.getElementById("pc-weekstart").value=getWeekStart(today());
+
+  document.getElementById("pc-totals").innerHTML=`
+    <div class="total-item"><div class="lbl">Total Expected</div><div class="total-val" style="color:var(--green)">${fmt(totalEarned)}</div></div>
+    <div class="total-item"><div class="lbl">Total Received</div><div class="total-val" style="color:var(--blue)">${fmt(totalPaid)}</div></div>
+    <div class="total-item"><div class="lbl">Outstanding</div><div class="total-val" style="color:${delta<-0.01?"var(--red)":delta>0.01?"var(--green)":"var(--muted)"}">${(delta>=0?"+":"")+fmt(delta)}</div></div>`;
+
+  const list=document.getElementById("pc-list");
+  if(!paychecks.length){ list.innerHTML='<div class="empty">No paychecks logged yet.</div>'; return; }
+
+  list.innerHTML=[...paychecks].sort((a,b)=>b.weekStart.localeCompare(a.weekStart)).map(p=>{
+    const wk=wd[p.weekStart];
+    const exp=wk?wk.earned:0;
+    const rec=Number(p.amount);
+    const d=exp-rec;
+    return `<div class="pc-row" style="margin-bottom:10px">
+      <div style="flex:1">
+        <div class="week-range">${weekLabel(p.weekStart)}</div>
+        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">
+          <div><div class="lbl">Expected</div><div style="font-size:13px;font-weight:700;color:var(--green)">${fmt(exp)}</div></div>
+          <div><div class="lbl">Received</div><div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(rec)}</div></div>
+          <div><div class="lbl">Diff</div><div style="font-size:13px;font-weight:700;color:${d<-0.01?"var(--red)":d>0.01?"var(--green)":"var(--muted)"}">${(d>=0?"+":"")+fmt(d)}</div></div>
+        </div>
+      </div>
+      <button class="btn-ghost" style="font-size:10px;align-self:flex-start" onclick="editPc('${p.weekStart}',${p.amount})">Edit</button>
+    </div>`;
+  }).join("");
+}
+
+async function savePaycheck(){
+  const ws=document.getElementById("pc-weekstart").value;
+  const amt=document.getElementById("pc-amount").value;
+  if(!ws||!amt) return;
+  try{
+    await apiPost("/paychecks",{weekStart:ws,amount:Number(amt)});
+    await loadData();
+    cancelPcEdit();
+    showToast("✓ Paycheck saved");
+    renderPaychecks();
+  } catch(e){ showToast("⚠ Could not save"); }
+}
+function editPc(ws,amt){
+  editingPc=ws;
+  document.getElementById("pc-weekstart").value=ws;
+  document.getElementById("pc-amount").value=amt;
+  document.getElementById("pc-form-title").textContent="Edit Paycheck";
+  document.getElementById("pc-cancel").style.display="inline-block";
+}
+function cancelPcEdit(){
+  editingPc=null;
+  document.getElementById("pc-amount").value="";
+  document.getElementById("pc-form-title").textContent="Log Paycheck Received";
+  document.getElementById("pc-cancel").style.display="none";
+}
+
+// ── Render Goals ──────────────────────────────────────────────────────────────
+function renderGoals(){
+  const el=document.getElementById("goals-content");
+  const wd=getWeeklyData();
+  const md=getMonthlyData();
+  const totalEarned=orders.reduce((s,o)=>s+o.commission,0);
+  const ws=Object.keys(wd).sort((a,b)=>b.localeCompare(a));
+  const ms=Object.keys(md).sort((a,b)=>b.localeCompare(a));
+  const cw=getWeekStart(today());
+  const cwData=wd[cw]||{earned:0};
+  const cm=monthKey(today());
+  const cmData=md[cm]||{earned:0};
+
+  // Best stats
+  let bestDay=null,bestDayAmt=0;
+  const byDay={};
+  orders.forEach(o=>{ byDay[o.date]=(byDay[o.date]||0)+o.commission; });
+  Object.entries(byDay).forEach(([d,a])=>{ if(a>bestDayAmt){bestDayAmt=a;bestDay=d;} });
+  let bestWk=null,bestWkAmt=0;
+  ws.forEach(w=>{ if(wd[w].earned>bestWkAmt){bestWkAmt=wd[w].earned;bestWk=w;} });
+  const avgWk=ws.length?totalEarned/ws.length:0;
+
+  // Type breakdown
+  const tb={new:{count:0,earned:0},reactivation:{count:0,earned:0}};
+  orders.forEach(o=>{ tb[o.type].count++;tb[o.type].earned+=o.commission; });
+
+  const wg=Number(weekGoal)||0;
+  const mg=Number(monthGoal)||0;
+  const wPct=wg?Math.min(100,(cwData.earned/wg)*100):0;
+  const mPct=mg?Math.min(100,(cmData.earned/mg)*100):0;
+
+  // Pace
+  const dow=new Date(today()+"T12:00:00").getDay();
+  const dayOfWeek=dow===0?6:dow-1;
+  const daysElapsed=dayOfWeek+1, daysLeft=7-daysElapsed;
+  const projected=daysElapsed>0?(cwData.earned/daysElapsed)*7:0;
+  const onTrack=wg?projected>=wg:true;
+  const neededPerDay=wg&&daysLeft>0?Math.max(0,wg-cwData.earned)/daysLeft:0;
+
+  el.innerHTML=`
+    ${orders.length?`
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
+      <div class="stats-grid">
+        <div class="stat-item"><div class="lbl">Best Day</div><div class="stat-val">${bestDay?fmt(bestDayAmt):"—"}</div><div class="stat-sub">${bestDay?fmtDate(bestDay):""}</div></div>
+        <div class="stat-item"><div class="lbl">Best Week</div><div class="stat-val">${bestWk?fmt(bestWkAmt):"—"}</div><div class="stat-sub">${bestWk?weekLabel(bestWk):""}</div></div>
+        <div class="stat-item"><div class="lbl">Avg/Week</div><div class="stat-val">${fmt(avgWk)}</div><div class="stat-sub">${ws.length} week${ws.length!==1?"s":""}</div></div>
+        <div class="stat-item"><div class="lbl">Orders</div><div class="stat-val">${orders.length}</div><div class="stat-sub">${fmt(totalEarned)}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Order Type Breakdown</div>
+      <div class="type-cards">
+        ${["new","reactivation"].map(t=>`
+          <div class="type-card">
+            <div class="type-label" style="color:${t==="new"?"var(--green)":"var(--purple)"}">${t==="new"?"New Activations":"Reactivations"}</div>
+            <div class="type-count">${tb[t].count}</div>
+            <div class="type-earned">${fmt(tb[t].earned)} earned</div>
+            <div class="type-bar"><div style="height:100%;width:${orders.length?(tb[t].count/orders.length)*100:0}%;background:${t==="new"?"var(--green)":"var(--purple)"};border-radius:2px"></div></div>
+          </div>`).join("")}
+      </div>
+    </div>`:""}
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Weekly Goal</div>
+      <div class="row" style="align-items:flex-end">
+        <div class="field"><label class="lbl">Target ($)</label><input type="number" id="wg-input" min="0" value="${weekGoal}" placeholder="e.g. 300"/></div>
+        <button class="btn-primary" onclick="setWeekGoal()">Set</button>
+        ${weekGoal?`<button class="btn-ghost" onclick="clearWeekGoal()">Clear</button>`:""}
+      </div>
+    </div>
+
+    ${wg?`
+    <div class="card glow" style="margin-bottom:12px">
+      <div class="card-title">This Week · ${weekLabel(cw)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--green);letter-spacing:-.03em">${fmt(cwData.earned)}</div>
+          <div class="lbl" style="margin-top:2px">of ${fmt(wg)} goal</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:700;color:${wPct>=100?"var(--green)":"var(--text)"}">${Math.round(wPct)}%</div>
+          ${wPct<100?`<div class="lbl">${fmt(Math.max(0,wg-cwData.earned))} to go</div>`:`<div style="font-size:11px;color:var(--green)">Goal hit! 🎯</div>`}
+        </div>
+      </div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${wPct}%;background:${wPct>=100?"var(--green)":"var(--blue)"}"></div></div>
+      <div class="pace-grid">
+        <div class="pace-item"><div class="lbl">Status</div><div style="font-size:13px;font-weight:700;margin-top:3px;color:${onTrack?"var(--green)":"var(--red)"}">${onTrack?"✓ On Track":"⚠ Behind"}</div></div>
+        <div class="pace-item"><div class="lbl">Projected</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-top:3px">${fmt(projected)}</div></div>
+        ${!onTrack&&daysLeft>0?`<div class="pace-item"><div class="lbl">Need/Day</div><div style="font-size:13px;font-weight:700;color:var(--orange);margin-top:3px">${fmt(neededPerDay)}</div></div>`:""}
+      </div>
+    </div>`:""}
+
+    ${ws.length?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Weekly Earnings Chart</div>
+      <div class="chart-wrap"><canvas id="week-chart"></canvas></div>
+      ${wg&&ws.length?`<div style="margin-top:14px">
+        <div class="card-title">Week vs Goal</div>
+        ${ws.map(w=>{
+          const pct=Math.min(100,(wd[w].earned/wg)*100);
+          const hit=wd[w].earned>=wg;
+          return `<div class="wvg-row">
+            <div class="wvg-head">
+              <span style="color:var(--dim)">${weekLabel(w)}</span>
+              <span style="font-weight:700;color:${hit?"var(--green)":"var(--muted)"}">${fmt(wd[w].earned)}${hit?" ✓":""}</span>
+            </div>
+            <div class="wvg-track"><div class="wvg-fill" style="width:${pct}%;background:${hit?"var(--green)":"var(--blue)"}"></div></div>
+          </div>`;
+        }).join("")}
+      </div>`:""}
+    </div>`:""}
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Monthly Goal</div>
+      <div class="row" style="align-items:flex-end">
+        <div class="field"><label class="lbl">Target ($)</label><input type="number" id="mg-input" min="0" value="${monthGoal}" placeholder="e.g. 1200"/></div>
+        <button class="btn-primary" onclick="setMonthGoal()">Set</button>
+        ${monthGoal?`<button class="btn-ghost" onclick="clearMonthGoal()">Clear</button>`:""}
+      </div>
+    </div>
+
+    ${mg?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">This Month · ${monthLabel(cm)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--green);letter-spacing:-.03em">${fmt(cmData.earned)}</div>
+          <div class="lbl" style="margin-top:2px">of ${fmt(mg)} goal</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:20px;font-weight:700;color:${mPct>=100?"var(--green)":"var(--text)"}">${Math.round(mPct)}%</div>
+          ${mPct<100?`<div class="lbl">${fmt(Math.max(0,mg-cmData.earned))} to go</div>`:`<div style="font-size:11px;color:var(--green)">Goal hit! 🎯</div>`}
+        </div>
+      </div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${mPct}%;background:${mPct>=100?"var(--green)":"var(--purple)"}"></div></div>
+    </div>`:""}
+
+    ${ms.length>1?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Monthly Earnings</div>
+      <div class="chart-wrap"><canvas id="month-chart"></canvas></div>
+      <div style="margin-top:12px">
+        ${ms.map(mk=>{
+          const pct=mg?Math.min(100,(md[mk].earned/mg)*100):0;
+          return `<div class="month-row">
+            <span class="month-lbl">${monthLabel(mk)}</span>
+            ${mg?`<div class="month-bar-track"><div class="month-bar-fill" style="width:${pct}%;background:${pct>=100?"var(--green)":"var(--purple)"}"></div></div>`:""}
+            <span class="month-val">${fmt(md[mk].earned)}</span>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>`:""}
+
+    ${!orders.length?`<div class="empty">Log some orders to see stats and charts.</div>`:""}
+  `;
+
+  // Draw charts after DOM renders
+  requestAnimationFrame(()=>{
+    drawWeekChart(ws,wd,wg);
+    drawMonthChart(ms,md,mg);
+  });
+}
+
+function drawWeekChart(ws,wd,wg){
+  const canvas=document.getElementById("week-chart"); if(!canvas) return;
+  if(weekChart) weekChart.destroy();
+  const labels=ws.slice(0,8).reverse().map(w=>new Date(w+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}));
+  const data=ws.slice(0,8).reverse().map(w=>wd[w].earned);
+  weekChart=new Chart(canvas,{
+    type:"bar",
+    data:{ labels, datasets:[{ data, backgroundColor:data.map((v,i)=>wg&&v>=wg?"#00e5a0":"#00b8ff"), borderRadius:4 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},
+        annotation: wg ? { annotations: { goal: { type:'line', yMin:wg, yMax:wg, borderColor:'#facc15', borderWidth:1, borderDash:[4,3] } } } : {}
+      },
+      scales:{
+        x:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"}},grid:{display:false}},
+        y:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`},grid:{color:"#1e1e26"}}
+      }
+    }
+  });
+}
+
+function drawMonthChart(ms,md,mg){
+  const canvas=document.getElementById("month-chart"); if(!canvas) return;
+  if(monthChart) monthChart.destroy();
+  if(ms.length<2) return;
+  const labels=ms.slice(0,6).reverse().map(mk=>monthLabel(mk));
+  const data=ms.slice(0,6).reverse().map(mk=>md[mk].earned);
+  monthChart=new Chart(canvas,{
+    type:"line",
+    data:{ labels, datasets:[{ data, borderColor:"#00e5a0", borderWidth:2, pointBackgroundColor:"#00e5a0", fill:true, backgroundColor:"rgba(0,229,160,0.08)", tension:0.3 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"}},grid:{display:false}},
+        y:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`},grid:{color:"#1e1e26"}}
+      }
+    }
+  });
+}
+
+function setWeekGoal(){
+  weekGoal=document.getElementById("wg-input").value;
+  localStorage.setItem("weekGoal",weekGoal);
+  renderGoals();
+}
+function clearWeekGoal(){ weekGoal=""; localStorage.removeItem("weekGoal"); renderGoals(); }
+function setMonthGoal(){
+  monthGoal=document.getElementById("mg-input").value;
+  localStorage.setItem("monthGoal",monthGoal);
+  renderGoals();
+}
+function clearMonthGoal(){ monthGoal=""; localStorage.removeItem("monthGoal"); renderGoals(); }
+
+// ── Update All ────────────────────────────────────────────────────────────────
+function updateAll(){
+  updatePills();
+  updateTodayCard();
+  const active=document.querySelector(".nav-btn.active");
+  if(active){
+    const v=["order","history","week","paycheck","goals"][Array.from(document.querySelectorAll(".nav-btn")).indexOf(active)];
+    if(v==="history")  renderHistory();
+    if(v==="week")     renderWeekly();
+    if(v==="paycheck") renderPaychecks();
+    if(v==="goals")    renderGoals();
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById("ob-date").value=today();
+document.getElementById("pc-weekstart").value=getWeekStart(today());
+loadData();
+setInterval(loadData, 30000); // auto-refresh every 30s
+</script>
+</body>
+</html>
