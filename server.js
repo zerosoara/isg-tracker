@@ -198,12 +198,20 @@ app.post("/paychecks", authMiddleware, (req, res) => {
   res.json({ success:true });
 });
 
-// ── Admin: list all users (useful for you to see who signed up) ───────────────
+// ── Admin: list all users ─────────────────────────────────────────────────────
 app.get("/admin/users", (req, res) => {
   const key = req.headers["x-admin-key"];
   if (key !== "ninja2026admin") return res.status(403).json({ error:"Forbidden" });
   const db = load();
   res.json(db.users.map(u => ({ id:u.id, email:u.email, name:u.name, createdAt:u.createdAt })));
+});
+
+// ── Admin: list all orders ────────────────────────────────────────────────────
+app.get("/admin/orders", (req, res) => {
+  const key = req.headers["x-admin-key"];
+  if (key !== "ninja2026admin") return res.status(403).json({ error:"Forbidden" });
+  const db = load();
+  res.json(db.orders);
 });
 
 app.listen(PORT, () => console.log(`Ninja Tracker running on port ${PORT}`));
