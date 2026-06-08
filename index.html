@@ -287,7 +287,20 @@
   /* CHART */
   .chart-wrap { position: relative; height: 160px; margin-top: 4px; }
 
-  .empty { color: #333; font-size: 12px; text-align: center; padding: 40px 0; letter-spacing: .04em; }
+  /* PRESETS */
+  .presets-row { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:4px; }
+  .preset-btn {
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--dim);
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 11px;
+    font-family: 'JetBrains Mono', monospace; transition: all .15s; flex: 1 1 0;
+    text-align: center; line-height: 1.4;
+  }
+  .preset-btn:hover { border-color: var(--green); color: var(--green); }
+  .preset-btn .preset-amt { font-size: 13px; font-weight: 700; color: var(--green); display: block; margin-bottom: 2px; }
+  .preset-btn .preset-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+  /* TABLET/WATCH */
+  .addon-row { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
 
   /* LOADING */
   .loading {
@@ -354,6 +367,21 @@
     border-radius: 5px; padding: 3px 8px; cursor: pointer; font-size: 10px;
     font-family: 'JetBrains Mono', monospace;
   }
+  .pw-wrap { position: relative; }
+  .pw-wrap input { padding-right: 40px !important; width: 100%; }
+  .pw-eye {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 15px; padding: 0; line-height: 1;
+  }
+  .pw-eye:hover { color: var(--green); }
+  .auth-link {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    text-decoration: underline; margin-top: 10px; display: block; text-align: center;
+  }
+  .auth-link:hover { color: var(--green); }
+  .reset-info { font-size: 11px; color: var(--muted); text-align: center; margin-bottom: 14px; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -372,18 +400,51 @@
     </div>
     <!-- LOGIN -->
     <div id="form-login">
-      <div class="auth-field"><label>Email</label><input type="email" id="login-email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-      <div class="auth-field"><label>Password</label><input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div class="auth-field"><label>Email</label><input type="email" id="login-email" placeholder="you@email.com" autocorrect="off" autocapitalize="off" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div class="auth-field">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="login-pw" placeholder="••••••••" autocorrect="off" autocapitalize="off" onkeydown="if(event.key==='Enter')doLogin()"/>
+          <button class="pw-eye" type="button" onclick="toggleEye('login-pw',this)">👁</button>
+        </div>
+      </div>
       <button class="auth-btn" onclick="doLogin()" id="login-btn">Log In</button>
       <div class="auth-error" id="login-error"></div>
+      <button class="auth-link" onclick="switchAuthTab('reset')">Forgot password?</button>
     </div>
     <!-- SIGNUP -->
     <div id="form-signup" style="display:none">
-      <div class="auth-field"><label>Your Name</label><input type="text" id="signup-name" placeholder="First Last" onkeydown="if(event.key==='Enter')doSignup()"/></div>
-      <div class="auth-field"><label>Email</label><input type="email" id="signup-email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')doSignup()"/></div>
-      <div class="auth-field"><label>Password</label><input type="password" id="signup-pw" placeholder="Choose a password" onkeydown="if(event.key==='Enter')doSignup()"/></div>
+      <div class="auth-field"><label>Your Name</label><input type="text" id="signup-name" placeholder="First Last" autocorrect="off" autocapitalize="words" onkeydown="if(event.key==='Enter')doSignup()"/></div>
+      <div class="auth-field"><label>Email</label><input type="email" id="signup-email" placeholder="you@email.com" autocorrect="off" autocapitalize="off" onkeydown="if(event.key==='Enter')doSignup()"/></div>
+      <div class="auth-field">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="signup-pw" placeholder="Choose a password" autocorrect="off" autocapitalize="off" onkeydown="if(event.key==='Enter')doSignup()"/>
+          <button class="pw-eye" type="button" onclick="toggleEye('signup-pw',this)">👁</button>
+        </div>
+      </div>
       <button class="auth-btn" onclick="doSignup()" id="signup-btn">Create Account</button>
       <div class="auth-error" id="signup-error"></div>
+    </div>
+    <!-- RESET PASSWORD -->
+    <div id="form-reset" style="display:none">
+      <div class="reset-info">Enter your email and new password.<br/>You'll be logged in automatically.</div>
+      <div class="auth-field"><label>Email</label><input type="email" id="reset-email" placeholder="you@email.com" autocorrect="off" autocapitalize="off"/></div>
+      <div class="auth-field">
+        <label>New Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="reset-pw" placeholder="New password" autocorrect="off" autocapitalize="off" onkeydown="if(event.key==='Enter')doReset()"/>
+          <button class="pw-eye" type="button" onclick="toggleEye('reset-pw',this)">👁</button>
+        </div>
+      </div>
+      <div class="auth-field">
+        <label>Reset Code</label>
+        <input type="text" id="reset-code" placeholder="Enter code from admin" autocorrect="off" autocapitalize="off"/>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Ask Chad for your reset code</div>
+      </div>
+      <button class="auth-btn" onclick="doReset()" id="reset-btn">Reset Password</button>
+      <div class="auth-error" id="reset-error"></div>
+      <button class="auth-link" onclick="switchAuthTab('login')">← Back to login</button>
     </div>
   </div>
 </div>
@@ -440,6 +501,30 @@
     </div>
     <div class="card">
       <div class="card-title" id="ob-title">Build Order</div>
+
+      <!-- QUICK PRESETS -->
+      <div style="margin-bottom:14px">
+        <div class="sec-lbl" style="margin-bottom:8px">Quick Presets</div>
+        <div class="presets-row">
+          <button class="preset-btn" onclick="applyPreset('single')">
+            <span class="preset-amt">$26</span>
+            <span class="preset-lbl">1 Line + ACH</span>
+          </button>
+          <button class="preset-btn" onclick="applyPreset('double')">
+            <span class="preset-amt">$41</span>
+            <span class="preset-lbl">2 Lines + ACH</span>
+          </button>
+          <button class="preset-btn" onclick="applyPreset('triple')">
+            <span class="preset-amt">$56</span>
+            <span class="preset-lbl">3 Lines + ACH</span>
+          </button>
+          <button class="preset-btn" onclick="applyPreset('reactivation')">
+            <span class="preset-amt">$10</span>
+            <span class="preset-lbl">Reactivation</span>
+          </button>
+        </div>
+      </div>
+
       <div class="row" style="margin-bottom:4px">
         <div class="field" style="flex:0 0 150px">
           <label class="lbl">Date</label>
@@ -469,7 +554,7 @@
             </select>
           </div>
           <div class="field">
-            <label class="lbl">Home Phone Lines <span>($15 each)</span></label>
+            <label class="lbl">Home Phone Lines <span>($10 each)</span></label>
             <select id="ob-home" onchange="updateCalc()">
               <option value="0">None</option>
               <option value="1">1 line</option><option value="2">2 lines</option>
@@ -519,6 +604,22 @@
               <option value="0">None</option>
               <option value="1">1</option><option value="2">2</option><option value="3">3</option>
               <option value="4">4</option><option value="5">5</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div class="field">
+            <label class="lbl">Tablet w/ Line <span>· $10 each</span></label>
+            <select id="ob-tablet" onchange="updateCalc()">
+              <option value="0">None</option>
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">Watch w/ Line <span>· $5 each</span></label>
+            <select id="ob-watch" onchange="updateCalc()">
+              <option value="0">None</option>
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
             </select>
           </div>
         </div>
@@ -601,10 +702,39 @@ function getHeaders() {
 
 // ── Auth UI ───────────────────────────────────────────────────────────────────
 function switchAuthTab(tab) {
-  document.getElementById("form-login").style.display  = tab==="login"  ? "block":"none";
-  document.getElementById("form-signup").style.display = tab==="signup" ? "block":"none";
+  ["login","signup","reset"].forEach(t => {
+    document.getElementById("form-"+t).style.display  = t===tab ? "block":"none";
+  });
   document.getElementById("tab-login").className  = "auth-tab"+(tab==="login" ?" active":"");
   document.getElementById("tab-signup").className = "auth-tab"+(tab==="signup"?" active":"");
+}
+
+function toggleEye(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (input.type === "password") {
+    input.type = "text";
+    btn.textContent = "🙈";
+  } else {
+    input.type = "password";
+    btn.textContent = "👁";
+  }
+}
+
+async function doReset() {
+  const email = document.getElementById("reset-email").value.trim();
+  const pw    = document.getElementById("reset-pw").value;
+  const code  = document.getElementById("reset-code").value.trim();
+  const errEl = document.getElementById("reset-error");
+  const btn   = document.getElementById("reset-btn");
+  if (!email||!pw||!code) { errEl.textContent="Please fill in all fields"; return; }
+  if (pw.length < 6) { errEl.textContent="Password must be at least 6 characters"; return; }
+  btn.disabled=true; btn.textContent="Resetting..."; errEl.textContent="";
+  try {
+    const r = await fetch(`${API}/auth/reset`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password:pw,code})});
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent=d.error||"Reset failed"; btn.disabled=false; btn.textContent="Reset Password"; return; }
+    setSession(d);
+  } catch(e) { errEl.textContent="Cannot reach server"; btn.disabled=false; btn.textContent="Reset Password"; }
 }
 
 async function doLogin() {
@@ -674,7 +804,32 @@ let weekChart = null;
 let monthChart= null;
 
 // ── Rates ────────────────────────────────────────────────────────────────────
-const R = { newLine1:25, newLineN:15, reactivation:10, homeLine:15 };
+const R = { newLine1:25, newLineN:15, reactivation:10, homeLine:10, irisAlly:10, tablet:10, watch:5, protection:2 };
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+function applyPreset(type) {
+  resetBuilder();
+  if (type === 'single') {
+    document.getElementById("ob-lines").value = "1";
+    obAcct.autopay = true;
+    document.getElementById("tog-autopay").className = "toggle-btn on";
+    document.getElementById("tog-autopay").textContent = "✓ Autopay";
+  } else if (type === 'double') {
+    document.getElementById("ob-lines").value = "2";
+    obAcct.autopay = true;
+    document.getElementById("tog-autopay").className = "toggle-btn on";
+    document.getElementById("tog-autopay").textContent = "✓ Autopay";
+  } else if (type === 'triple') {
+    document.getElementById("ob-lines").value = "3";
+    obAcct.autopay = true;
+    document.getElementById("tog-autopay").className = "toggle-btn on";
+    document.getElementById("tog-autopay").textContent = "✓ Autopay";
+  } else if (type === 'reactivation') {
+    document.getElementById("ob-lines").value = "1";
+    setType("reactivation");
+  }
+  updateCalc();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n){ return "$"+Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
@@ -707,14 +862,16 @@ function calcCommission(o){
   else{
     if(regularLines>=1) t+=R.newLine1;
     if(regularLines>=2) t+=(regularLines-1)*R.newLineN;
-    t+=homeLines*R.homeLine;
+    t+=(homeLines||0)*R.homeLine;
   }
   if(perAccount.aarp)    t+=1;
   if(perAccount.autopay) t+=1;
   t+=(perDevice.device||0)*1;
-  t+=(perDevice.protection||0)*1;
+  t+=(perDevice.protection||0)*R.protection;
   t+=(perDevice.accessories||0)*1;
-  t+=(perDevice.irisAlly||0)*10;
+  t+=(perDevice.irisAlly||0)*R.irisAlly;
+  t+=(perDevice.tabletWithLine||0)*R.tablet;
+  t+=(perDevice.watchWithLine||0)*R.watch;
   return t;
 }
 
@@ -730,11 +887,13 @@ function buildBreakdown(o){
     if(homeLines>0) items.push({label:`Home×${homeLines}`,amt:homeLines*R.homeLine,color:"var(--orange)"});
   }
   if(perAccount.aarp)    items.push({label:"AARP",amt:1,color:"var(--yellow)"});
-  if(perAccount.autopay) items.push({label:"Autopay",amt:1,color:"var(--yellow)"});
-  if((perDevice.device||0)>0)       items.push({label:`Device×${perDevice.device}`,amt:perDevice.device,color:"var(--pink)"});
-  if((perDevice.protection||0)>0)   items.push({label:`Protection×${perDevice.protection}`,amt:perDevice.protection,color:"var(--pink)"});
-  if((perDevice.accessories||0)>0)  items.push({label:`Accessories×${perDevice.accessories}`,amt:perDevice.accessories,color:"var(--pink)"});
-  if((perDevice.irisAlly||0)>0)     items.push({label:`Iris Ally×${perDevice.irisAlly}`,amt:(perDevice.irisAlly)*10,color:"var(--orange)"});
+  if(perAccount.autopay) items.push({label:"ACH/Autopay",amt:1,color:"var(--yellow)"});
+  if((perDevice.device||0)>0)           items.push({label:`Device×${perDevice.device}`,amt:perDevice.device,color:"var(--pink)"});
+  if((perDevice.protection||0)>0)       items.push({label:`Protection×${perDevice.protection}`,amt:perDevice.protection*R.protection,color:"var(--pink)"});
+  if((perDevice.accessories||0)>0)      items.push({label:`Accessories×${perDevice.accessories}`,amt:perDevice.accessories,color:"var(--pink)"});
+  if((perDevice.irisAlly||0)>0)         items.push({label:`Iris Ally×${perDevice.irisAlly}`,amt:perDevice.irisAlly*R.irisAlly,color:"var(--orange)"});
+  if((perDevice.tabletWithLine||0)>0)   items.push({label:`Tablet×${perDevice.tabletWithLine}`,amt:perDevice.tabletWithLine*R.tablet,color:"var(--blue)"});
+  if((perDevice.watchWithLine||0)>0)    items.push({label:`Watch×${perDevice.watchWithLine}`,amt:perDevice.watchWithLine*R.watch,color:"var(--purple)"});
   return items;
 }
 
@@ -810,7 +969,7 @@ function updateCalc(){
   const order = {
     type: obType, regularLines:lines, homeLines:home,
     perAccount:{...obAcct},
-    perDevice:{device,protection:prot,accessories:accInput}
+    perDevice:{device,protection:prot,accessories:accInput,irisAlly:parseInt(document.getElementById("ob-iris").value)||0,tabletWithLine:parseInt(document.getElementById("ob-tablet").value)||0,watchWithLine:parseInt(document.getElementById("ob-watch").value)||0}
   };
   const comm = calcCommission(order);
   const bd   = buildBreakdown(order);
@@ -849,6 +1008,8 @@ async function submitOrder(){
   const prot    = parseInt(document.getElementById("ob-protection").value)||0;
   const acc     = parseInt(document.getElementById("ob-accessories").value)||0;
   const iris    = parseInt(document.getElementById("ob-iris").value)||0;
+  const tablet  = parseInt(document.getElementById("ob-tablet").value)||0;
+  const watch   = parseInt(document.getElementById("ob-watch").value)||0;
   const note    = document.getElementById("ob-note").value;
 
   if(lines===0&&home===0) return;
@@ -857,7 +1018,7 @@ async function submitOrder(){
     date:dateVal, note, type:obType,
     regularLines:lines, homeLines:home,
     perAccount:{...obAcct},
-    perDevice:{device,protection:prot,accessories:acc,irisAlly:iris},
+    perDevice:{device,protection:prot,accessories:acc,irisAlly:iris,tabletWithLine:tablet,watchWithLine:watch},
   };
   order.commission = calcCommission(order);
   order.breakdown  = buildBreakdown(order);
@@ -887,6 +1048,9 @@ function resetBuilder(){
   document.getElementById("ob-home").value="0";
   document.getElementById("ob-device").value="0";
   document.getElementById("ob-accessories").value="";
+  document.getElementById("ob-iris").value="0";
+  document.getElementById("ob-tablet").value="0";
+  document.getElementById("ob-watch").value="0";
   document.getElementById("ob-note").value="";
   document.getElementById("tog-aarp").className="toggle-btn";
   document.getElementById("tog-aarp").textContent="+ AARP";
@@ -908,6 +1072,9 @@ function startEdit(id){
   document.getElementById("ob-home").value=o.homeLines;
   document.getElementById("ob-device").value=o.perDevice.device||0;
   document.getElementById("ob-accessories").value=o.perDevice.accessories||0;
+  document.getElementById("ob-iris").value=o.perDevice.irisAlly||0;
+  document.getElementById("ob-tablet").value=o.perDevice.tabletWithLine||0;
+  document.getElementById("ob-watch").value=o.perDevice.watchWithLine||0;
   document.getElementById("ob-note").value=o.note||"";
   setType(o.type);
   if(o.perAccount.aarp)    toggleAcct("aarp");
