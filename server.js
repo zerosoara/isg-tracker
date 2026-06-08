@@ -241,7 +241,21 @@ app.post("/paychecks", authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
-// Admin - users
+// Reset password
+app.post("/auth/reset", async (req, res) => {
+  try {
+    const { email, password, code } = req.body;
+    if (code !== "ninja2026reset") return res.status(401).json({ error:"Invalid reset code" });
+    if (!email || !password) return res.status(400).json({ error:"Missing fields" });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return res.status(404).json({ error:"Email not found" });
+    user.password = hashPassword(password);
+    user.token    = genToken();
+    await user.save();
+    console.log(`[RESET] ${user.email}`);
+    res.json({ token:user.token, name:user.name, email:user.email, id:user._id });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
 app.get("/admin/users", async (req, res) => {
   if (req.headers["x-admin-key"] !== "ninja2026admin") return res.status(403).json({ error:"Forbidden" });
   const users = await User.find({}, { password:0, token:0 }).lean();
