@@ -904,7 +904,9 @@ async function loadData(){
     const r = await fetch(`${API}/data`, { headers: getHeaders() });
     if (r.status === 401) { doLogout(); return; }
     const d = await r.json();
-    orders    = d.orders    || [];
+    // MongoDB returns each record with _id; the UI references o.id everywhere
+    // (edit/delete buttons). Mirror _id -> id so those actions target the right order.
+    orders    = (d.orders || []).map(o => ({ ...o, id: o._id }));
     paychecks = d.paychecks || [];
     setSyncStatus(true);
     updateAll();
