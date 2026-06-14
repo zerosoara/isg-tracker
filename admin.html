@@ -4,13 +4,14 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Ninja Tracker — Admin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
   :root {
     --bg:#08080a; --bg2:#0f0f13; --bg3:#141418;
     --border:#1e1e26; --border2:#2a2a35;
     --green:#00e5a0; --blue:#00b8ff; --purple:#a78bfa;
-    --orange:#fb923c; --yellow:#facc15; --red:#ff6b6b;
+    --orange:#fb923c; --yellow:#facc15; --pink:#f472b6; --red:#ff6b6b;
     --text:#e8e8f0; --muted:#7a7a8a; --dim:#9a9aaa;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -41,8 +42,8 @@
 
   .section-title { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.12em; margin-bottom:12px; font-weight:600; }
 
-  .tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:16px; }
-  .tab { background:none; border:none; color:var(--muted); padding:10px 16px; cursor:pointer; font-size:11px; font-family:'JetBrains Mono',monospace; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; }
+  .tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:16px; overflow-x:auto; }
+  .tab { background:none; border:none; color:var(--muted); padding:10px 16px; cursor:pointer; font-size:11px; font-family:'JetBrains Mono',monospace; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; white-space:nowrap; }
   .tab.active { color:var(--green); border-bottom-color:var(--green); }
 
   table { width:100%; border-collapse:collapse; }
@@ -63,6 +64,45 @@
   .loading-msg { color:var(--muted); font-size:12px; text-align:center; padding:40px 0; letter-spacing:.08em; }
   .refresh-btn { background:none; border:1px solid var(--border2); color:var(--muted); border-radius:6px; padding:5px 12px; cursor:pointer; font-size:10px; font-family:'JetBrains Mono',monospace; }
   .refresh-btn:hover { border-color:var(--green); color:var(--green); }
+
+  /* action buttons in rows */
+  .act-btn { border:1px solid var(--border2); background:var(--bg3); color:var(--dim); border-radius:5px; padding:4px 9px; cursor:pointer; font-size:10px; font-family:'JetBrains Mono',monospace; margin-right:5px; }
+  .act-btn:hover { border-color:var(--blue); color:var(--blue); }
+  .act-btn.danger:hover { border-color:var(--red); color:var(--red); }
+
+  /* segmented controls */
+  .bd-controls { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+  .seg { display:inline-flex; border:1px solid var(--border2); border-radius:8px; overflow:hidden; }
+  .seg button { background:var(--bg2); border:none; color:var(--muted); padding:7px 14px; cursor:pointer; font-size:11px; font-family:'JetBrains Mono',monospace; }
+  .seg button.on { background:#00e5a015; color:var(--green); }
+  .seg-lbl { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; margin-right:6px; }
+
+  .bd-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+  .bd-card-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .bd-name { font-weight:700; color:var(--text); }
+  .bd-sub { font-size:10px; color:var(--muted); }
+
+  .addon-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; margin-bottom:20px; }
+  .addon-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .addon-lbl { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+  .addon-count { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; margin:3px 0; }
+  .addon-amt { font-size:11px; color:var(--green); }
+  .chart-wrap { position:relative; height:240px; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+
+  /* modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:flex-start; justify-content:center; padding:30px 14px; z-index:50; overflow-y:auto; }
+  .modal { background:var(--bg2); border:1px solid var(--border2); border-radius:14px; padding:22px; width:100%; max-width:420px; }
+  .modal h3 { font-family:'Syne',sans-serif; font-size:18px; color:var(--green); margin-bottom:14px; }
+  .modal .mrow { display:flex; gap:10px; margin-bottom:10px; }
+  .modal .mfield { flex:1; }
+  .modal label { display:block; font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; }
+  .modal input, .modal select { width:100%; background:var(--bg); border:1px solid var(--border2); border-radius:6px; color:var(--text); padding:8px 10px; font-size:12px; font-family:'JetBrains Mono',monospace; outline:none; }
+  .modal input:focus, .modal select:focus { border-color:var(--green); }
+  .modal .mtoggles { display:flex; gap:16px; margin:8px 0 14px; font-size:12px; color:var(--dim); }
+  .modal-actions { display:flex; gap:10px; margin-top:8px; }
+  .modal-actions button { flex:1; border-radius:8px; padding:10px; font-weight:700; font-size:12px; cursor:pointer; font-family:'JetBrains Mono',monospace; }
+  .save-btn { background:var(--green); color:#08080a; border:none; }
+  .cancel-btn { background:none; border:1px solid var(--border2); color:var(--dim); }
 </style>
 </head>
 <body>
@@ -106,8 +146,10 @@
 
     <!-- TABS -->
     <div class="tabs">
-      <button class="tab active" id="tab-users"  onclick="showTab('users')">Users</button>
-      <button class="tab"        id="tab-orders" onclick="showTab('orders')">All Orders</button>
+      <button class="tab active" id="tab-users"       onclick="showTab('users')">Users</button>
+      <button class="tab"        id="tab-orders"      onclick="showTab('orders')">All Orders</button>
+      <button class="tab"        id="tab-breakdown"   onclick="showTab('breakdown')">Breakdown</button>
+      <button class="tab"        id="tab-analytics"   onclick="showTab('analytics')">Analytics</button>
       <button class="tab"        id="tab-leaderboard" onclick="showTab('leaderboard')">Leaderboard</button>
     </div>
 
@@ -134,11 +176,77 @@
       <div id="orders-table"></div>
     </div>
 
+    <!-- BREAKDOWN TAB -->
+    <div id="view-breakdown" style="display:none">
+      <div class="bd-controls">
+        <div><span class="seg-lbl">View</span>
+          <span class="seg">
+            <button id="bdv-user"   onclick="setBdView('user')">By User</button>
+            <button id="bdv-period" onclick="setBdView('period')">By Period</button>
+          </span>
+        </div>
+        <div><span class="seg-lbl">Group</span>
+          <span class="seg">
+            <button id="bdg-day"   onclick="setBdGrain('day')">Day</button>
+            <button id="bdg-week"  onclick="setBdGrain('week')">Week</button>
+            <button id="bdg-month" onclick="setBdGrain('month')">Month</button>
+          </span>
+        </div>
+      </div>
+      <div id="breakdown-content"></div>
+    </div>
+
+    <!-- ANALYTICS TAB -->
+    <div id="view-analytics" style="display:none">
+      <div class="section-title">Add-on Totals — All Orders</div>
+      <div class="addon-grid" id="addon-grid"></div>
+      <div class="section-title">Activity — Last 30 Days</div>
+      <div class="chart-wrap"><canvas id="activity-chart"></canvas></div>
+    </div>
+
     <!-- LEADERBOARD TAB -->
     <div id="view-leaderboard" style="display:none">
       <div id="leaderboard-content"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- ORDER EDIT MODAL -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Order</h3>
+    <div class="mrow">
+      <div class="mfield"><label>Date</label><input type="date" id="m-date"/></div>
+      <div class="mfield"><label>Type</label>
+        <select id="m-type"><option value="new">New Activation</option><option value="reactivation">Reactivation</option></select>
+      </div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label>Regular Lines</label><input type="number" id="m-lines" min="0"/></div>
+      <div class="mfield"><label>Home Lines</label><input type="number" id="m-home" min="0"/></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label>New Devices</label><input type="number" id="m-device" min="0"/></div>
+      <div class="mfield"><label>Protection</label><input type="number" id="m-protection" min="0"/></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label>Accessories</label><input type="number" id="m-accessories" min="0"/></div>
+      <div class="mfield"><label>Iris Ally</label><input type="number" id="m-iris" min="0"/></div>
+    </div>
+    <div class="mrow">
+      <div class="mfield"><label>Tablet w/ line</label><input type="number" id="m-tablet" min="0"/></div>
+      <div class="mfield"><label>Watch w/ line</label><input type="number" id="m-watch" min="0"/></div>
+    </div>
+    <div class="mtoggles">
+      <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0"><input type="checkbox" id="m-aarp" style="width:auto"/> AARP</label>
+      <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0"><input type="checkbox" id="m-autopay" style="width:auto"/> Autopay/ACH</label>
+    </div>
+    <div class="mfield" style="margin-bottom:10px"><label>Note</label><input type="text" id="m-note"/></div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeEdit()">Cancel</button>
+      <button class="save-btn" onclick="saveEdit()" id="m-save">Save</button>
+    </div>
   </div>
 </div>
 
@@ -149,9 +257,24 @@ let adminKey    = sessionStorage.getItem("nt_admin_key") || null;
 
 let allUsers  = [];
 let allOrders = [];
+let editingOrderId = null;
+let bdView  = "user";    // 'user' | 'period'
+let bdGrain = "week";    // 'day' | 'week' | 'month'
+let activityChart = null;
 
-function fmt(n){ return "$"+Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
+// Commission rates (for add-on $ contribution display only)
+const RATES = { device:1, protection:2, accessories:1, irisAlly:10, tablet:10, watch:5, aarp:1, autopay:1 };
+
+function fmt(n){ return "$"+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
 function fmtDate(ds){ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
+function getWeekStart(ds){ const d=new Date(ds+"T12:00:00"); const day=d.getDay(); const diff=day===0?-6:1-day; d.setDate(d.getDate()+diff); return d.toISOString().split("T")[0]; }
+function monthKey(ds){ return (ds||"").slice(0,7); }
+function periodKeyOf(ds){ return bdGrain==="day"?ds : bdGrain==="month"?monthKey(ds) : getWeekStart(ds); }
+function periodLabel(k){
+  if (bdGrain==="day")   return fmtDate(k);
+  if (bdGrain==="month") return new Date(k+"-01T12:00:00").toLocaleDateString("en-US",{month:"short",year:"numeric"});
+  return "Wk of "+fmtDate(k);
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function doAdminLogin(){
@@ -170,6 +293,15 @@ function adminLogout(){
   document.getElementById("admin-panel").style.display="none";
 }
 
+// helper for admin API calls
+function adminFetch(path, opts){
+  opts = opts || {};
+  return fetch(`${API}${path}`, {
+    ...opts,
+    headers: { "x-admin-key":adminKey, "Content-Type":"application/json", ...(opts.headers||{}) },
+  });
+}
+
 // ── Load Data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   document.getElementById("users-table").innerHTML='<div class="loading-msg">LOADING...</div>';
@@ -178,11 +310,14 @@ async function loadAll(){
       fetch(`${API}/admin/users`,  { headers:{"x-admin-key":adminKey} }),
       fetch(`${API}/admin/orders`, { headers:{"x-admin-key":adminKey} }),
     ]);
-    allUsers  = await uRes.json();
-    allOrders = await oRes.json();
+    // API returns Mongo _id; mirror it to id so all matching (o.userId === u.id) works
+    allUsers  = (await uRes.json()).map(u => ({ ...u, id: u._id }));
+    allOrders = (await oRes.json()).map(o => ({ ...o, id: o._id }));
     updateStats();
     renderUsers();
     renderOrders();
+    renderBreakdown();
+    renderAnalytics();
     renderLeaderboard();
   } catch(e){
     document.getElementById("users-table").innerHTML='<div class="empty">Could not load data — check connection</div>';
@@ -202,7 +337,7 @@ function updateStats(){
 function renderUsers(){
   const q = (document.getElementById("user-search").value||"").toLowerCase();
   const filtered = allUsers.filter(u=>
-    u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    (u.name||"").toLowerCase().includes(q) || (u.email||"").toLowerCase().includes(q)
   );
 
   if (!filtered.length){ document.getElementById("users-table").innerHTML='<div class="empty">No users found</div>'; return; }
@@ -210,21 +345,53 @@ function renderUsers(){
   const rows = filtered.map(u=>{
     const uOrders = allOrders.filter(o=>o.userId===u.id);
     const comm    = uOrders.reduce((s,o)=>s+(o.commission||0),0);
-    const joined  = new Date(u.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    const joined  = u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "—";
     return `<tr>
-      <td style="color:var(--text);font-weight:600">${u.name}</td>
-      <td style="color:var(--muted)">${u.email}</td>
+      <td style="color:var(--text);font-weight:600">${u.name||""}</td>
+      <td style="color:var(--muted)">${u.email||""}</td>
       <td style="color:var(--blue)">${uOrders.length}</td>
       <td style="color:var(--green)">${fmt(comm)}</td>
       <td style="color:var(--muted)">${joined}</td>
+      <td style="white-space:nowrap">
+        <button class="act-btn" onclick="resetUserPw('${u.id}','${(u.email||"").replace(/'/g,"")}')">Reset PW</button>
+        <button class="act-btn" onclick="forceLogout('${u.id}','${(u.email||"").replace(/'/g,"")}')">Logout</button>
+        <button class="act-btn danger" onclick="deleteUser('${u.id}','${(u.name||"").replace(/'/g,"")}')">Delete</button>
+      </td>
     </tr>`;
   }).join("");
 
   document.getElementById("users-table").innerHTML=`
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Orders</th><th>Commission</th><th>Joined</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Orders</th><th>Commission</th><th>Joined</th><th>Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+}
+
+// ── User actions ────────────────────────────────────────────────────────────────
+async function deleteUser(id,name){
+  if (!confirm(`Delete ${name||"this user"} AND all their orders + paychecks?\nThis cannot be undone.`)) return;
+  try {
+    const r = await adminFetch(`/admin/users/${id}`, { method:"DELETE" });
+    if (!r.ok) throw new Error();
+    await loadAll();
+  } catch(e){ alert("Could not delete user — check connection."); }
+}
+async function resetUserPw(id,email){
+  const pw = prompt(`Enter a NEW password for ${email}.\nThey'll be logged out of all devices and must use this new password.`);
+  if (!pw) return;
+  try {
+    const r = await adminFetch(`/admin/users/${id}/password`, { method:"POST", body:JSON.stringify({ password:pw }) });
+    if (!r.ok) throw new Error();
+    alert(`Password reset. Tell ${email} their new password.`);
+  } catch(e){ alert("Could not reset password — check connection."); }
+}
+async function forceLogout(id,email){
+  if (!confirm(`Log ${email} out of all devices?`)) return;
+  try {
+    const r = await adminFetch(`/admin/users/${id}/logout`, { method:"POST" });
+    if (!r.ok) throw new Error();
+    alert(`${email} has been logged out everywhere.`);
+  } catch(e){ alert("Could not force logout — check connection."); }
 }
 
 // ── Orders Tab ────────────────────────────────────────────────────────────────
@@ -234,13 +401,13 @@ function renderOrders(){
 
   const filtered = allOrders.filter(o=>{
     const user = allUsers.find(u=>u.id===o.userId);
-    const name = user ? user.name.toLowerCase():"";
-    const email= user ? user.email.toLowerCase():"";
+    const name = user ? (user.name||"").toLowerCase():"";
+    const email= user ? (user.email||"").toLowerCase():"";
     const note = (o.note||"").toLowerCase();
     const matchQ = !q || name.includes(q)||email.includes(q)||note.includes(q);
     const matchT = !typeF || o.type===typeF;
     return matchQ && matchT;
-  }).sort((a,b)=>b.id-a.id);
+  }).sort((a,b)=> new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
 
   if (!filtered.length){ document.getElementById("orders-table").innerHTML='<div class="empty">No orders found</div>'; return; }
 
@@ -257,14 +424,226 @@ function renderOrders(){
       <td style="color:var(--green);font-weight:700">${fmt(o.commission||0)}</td>
       <td style="color:var(--muted);font-size:10px">${o.note||"—"}</td>
       <td>${o.source==="extension"?`<span style="color:var(--blue);font-size:10px">auto</span>`:`<span style="color:#333;font-size:10px">manual</span>`}</td>
+      <td style="white-space:nowrap">
+        <button class="act-btn" onclick="openEdit('${o.id}')">Edit</button>
+        <button class="act-btn danger" onclick="deleteOrder('${o.id}')">Delete</button>
+      </td>
     </tr>`;
   }).join("");
 
   document.getElementById("orders-table").innerHTML=`
     <table>
-      <thead><tr><th>Date</th><th>User</th><th>Type</th><th>Lines</th><th>Commission</th><th>Note</th><th>Source</th></tr></thead>
+      <thead><tr><th>Date</th><th>User</th><th>Type</th><th>Lines</th><th>Commission</th><th>Note</th><th>Source</th><th>Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+}
+
+// ── Order actions ───────────────────────────────────────────────────────────────
+async function deleteOrder(id){
+  if (!confirm("Delete this order? This cannot be undone.")) return;
+  try {
+    const r = await adminFetch(`/admin/orders/${id}`, { method:"DELETE" });
+    if (!r.ok) throw new Error();
+    await loadAll();
+  } catch(e){ alert("Could not delete order — check connection."); }
+}
+function openEdit(id){
+  const o = allOrders.find(x=>x.id===id); if(!o) return;
+  editingOrderId = id;
+  const pd = o.perDevice||{}, pa = o.perAccount||{};
+  document.getElementById("m-date").value        = o.date||"";
+  document.getElementById("m-type").value        = o.type||"new";
+  document.getElementById("m-lines").value       = o.regularLines||0;
+  document.getElementById("m-home").value        = o.homeLines||0;
+  document.getElementById("m-device").value      = pd.device||0;
+  document.getElementById("m-protection").value  = pd.protection||0;
+  document.getElementById("m-accessories").value = pd.accessories||0;
+  document.getElementById("m-iris").value        = pd.irisAlly||0;
+  document.getElementById("m-tablet").value      = pd.tabletWithLine||0;
+  document.getElementById("m-watch").value       = pd.watchWithLine||0;
+  document.getElementById("m-aarp").checked      = !!pa.aarp;
+  document.getElementById("m-autopay").checked   = !!pa.autopay;
+  document.getElementById("m-note").value        = o.note||"";
+  document.getElementById("edit-modal").style.display="flex";
+}
+function closeEdit(){ editingOrderId=null; document.getElementById("edit-modal").style.display="none"; }
+async function saveEdit(){
+  if (!editingOrderId) return;
+  const body = {
+    date:         document.getElementById("m-date").value,
+    type:         document.getElementById("m-type").value,
+    regularLines: parseInt(document.getElementById("m-lines").value)||0,
+    homeLines:    parseInt(document.getElementById("m-home").value)||0,
+    perAccount: {
+      aarp:    document.getElementById("m-aarp").checked,
+      autopay: document.getElementById("m-autopay").checked,
+    },
+    perDevice: {
+      device:         parseInt(document.getElementById("m-device").value)||0,
+      protection:     parseInt(document.getElementById("m-protection").value)||0,
+      accessories:    parseInt(document.getElementById("m-accessories").value)||0,
+      irisAlly:       parseInt(document.getElementById("m-iris").value)||0,
+      tabletWithLine: parseInt(document.getElementById("m-tablet").value)||0,
+      watchWithLine:  parseInt(document.getElementById("m-watch").value)||0,
+    },
+    note: document.getElementById("m-note").value,
+  };
+  const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving...";
+  try {
+    const r = await adminFetch(`/admin/orders/${editingOrderId}`, { method:"PUT", body:JSON.stringify(body) });
+    if (!r.ok) throw new Error();
+    closeEdit(); await loadAll();
+  } catch(e){ alert("Could not save order — check connection."); }
+  btn.disabled=false; btn.textContent="Save";
+}
+
+// ── Breakdown Tab ───────────────────────────────────────────────────────────────
+function setBdView(v){ bdView=v; renderBreakdown(); }
+function setBdGrain(g){ bdGrain=g; renderBreakdown(); }
+
+function renderBreakdown(){
+  // reflect active controls
+  document.getElementById("bdv-user").className   = bdView==="user"?"on":"";
+  document.getElementById("bdv-period").className = bdView==="period"?"on":"";
+  document.getElementById("bdg-day").className    = bdGrain==="day"?"on":"";
+  document.getElementById("bdg-week").className   = bdGrain==="week"?"on":"";
+  document.getElementById("bdg-month").className  = bdGrain==="month"?"on":"";
+
+  const el = document.getElementById("breakdown-content");
+  if (!allOrders.length){ el.innerHTML='<div class="empty">No orders yet</div>'; return; }
+  el.innerHTML = bdView==="user" ? bdByUserHTML() : bdByPeriodHTML();
+}
+
+function splitBucket(orders){
+  const b = { newC:0, newA:0, reC:0, reA:0 };
+  orders.forEach(o=>{
+    if (o.type==="reactivation"){ b.reC++; b.reA+=o.commission||0; }
+    else { b.newC++; b.newA+=o.commission||0; }
+  });
+  return b;
+}
+function bucketRow(label,b){
+  const total=b.newA+b.reA;
+  return `<tr>
+    <td style="color:var(--dim)">${label}</td>
+    <td style="color:var(--green)">${b.newC} · ${fmt(b.newA)}</td>
+    <td style="color:var(--purple)">${b.reC} · ${fmt(b.reA)}</td>
+    <td style="color:var(--text);font-weight:700">${fmt(total)}</td>
+  </tr>`;
+}
+
+function bdByUserHTML(){
+  const users = allUsers.map(u=>{
+    const uo = allOrders.filter(o=>o.userId===u.id);
+    return { u, uo, total:uo.reduce((s,o)=>s+(o.commission||0),0) };
+  }).filter(x=>x.uo.length).sort((a,b)=>b.total-a.total);
+
+  if (!users.length) return '<div class="empty">No orders yet</div>';
+
+  return users.map(({u,uo,total})=>{
+    const byPeriod={};
+    uo.forEach(o=>{ const k=periodKeyOf(o.date); (byPeriod[k]=byPeriod[k]||[]).push(o); });
+    const keys=Object.keys(byPeriod).sort((a,b)=>b.localeCompare(a)).slice(0,12);
+    const rows=keys.map(k=>bucketRow(periodLabel(k),splitBucket(byPeriod[k]))).join("");
+    return `<div class="bd-card">
+      <div class="bd-card-head">
+        <div><div class="bd-name">${u.name||""}</div><div class="bd-sub">${u.email||""} · ${uo.length} orders</div></div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--green)">${fmt(total)}</div>
+      </div>
+      <table><thead><tr><th>${bdGrain}</th><th>New (#·$)</th><th>Reactivation (#·$)</th><th>Total</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>`;
+  }).join("");
+}
+
+function bdByPeriodHTML(){
+  const byPeriod={};
+  allOrders.forEach(o=>{ const k=periodKeyOf(o.date); (byPeriod[k]=byPeriod[k]||[]).push(o); });
+  const keys=Object.keys(byPeriod).sort((a,b)=>b.localeCompare(a)).slice(0,12);
+  if (!keys.length) return '<div class="empty">No orders yet</div>';
+
+  return keys.map(k=>{
+    const periodOrders=byPeriod[k];
+    const ptotal=periodOrders.reduce((s,o)=>s+(o.commission||0),0);
+    // group this period's orders by user
+    const byUser={};
+    periodOrders.forEach(o=>{ (byUser[o.userId]=byUser[o.userId]||[]).push(o); });
+    const userRows=Object.keys(byUser).map(uid=>{
+      const u=allUsers.find(x=>x.id===uid);
+      return { name:u?u.name:"Unknown", b:splitBucket(byUser[uid]), tot:byUser[uid].reduce((s,o)=>s+(o.commission||0),0) };
+    }).sort((a,b)=>b.tot-a.tot)
+      .map(r=>bucketRow(r.name,r.b)).join("");
+    return `<div class="bd-card">
+      <div class="bd-card-head">
+        <div class="bd-name">${periodLabel(k)}</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--green)">${fmt(ptotal)}</div>
+      </div>
+      <table><thead><tr><th>User</th><th>New (#·$)</th><th>Reactivation (#·$)</th><th>Total</th></tr></thead>
+      <tbody>${userRows}</tbody></table>
+    </div>`;
+  }).join("");
+}
+
+// ── Analytics Tab ─────────────────────────────────────────────────────────────
+function renderAnalytics(){
+  // add-on totals
+  const t = { aarp:0, autopay:0, device:0, protection:0, accessories:0, irisAlly:0, tablet:0, watch:0 };
+  allOrders.forEach(o=>{
+    const pa=o.perAccount||{}, pd=o.perDevice||{};
+    if (pa.aarp) t.aarp++;
+    if (pa.autopay) t.autopay++;
+    t.device      += pd.device||0;
+    t.protection  += pd.protection||0;
+    t.accessories += pd.accessories||0;
+    t.irisAlly    += pd.irisAlly||0;
+    t.tablet      += pd.tabletWithLine||0;
+    t.watch       += pd.watchWithLine||0;
+  });
+  const cards=[
+    ["AARP",        t.aarp,        t.aarp*RATES.aarp,            "var(--yellow)"],
+    ["Autopay/ACH", t.autopay,     t.autopay*RATES.autopay,      "var(--yellow)"],
+    ["New Devices", t.device,      t.device*RATES.device,        "var(--pink)"],
+    ["Protection",  t.protection,  t.protection*RATES.protection,"var(--pink)"],
+    ["Accessories", t.accessories, t.accessories*RATES.accessories,"var(--pink)"],
+    ["Iris Ally",   t.irisAlly,    t.irisAlly*RATES.irisAlly,    "var(--orange)"],
+    ["Tablet w/line",t.tablet,     t.tablet*RATES.tablet,        "var(--blue)"],
+    ["Watch w/line",t.watch,       t.watch*RATES.watch,          "var(--purple)"],
+  ];
+  document.getElementById("addon-grid").innerHTML = cards.map(([lbl,cnt,amt,color])=>`
+    <div class="addon-card">
+      <div class="addon-lbl">${lbl}</div>
+      <div class="addon-count" style="color:${color}">${cnt}</div>
+      <div class="addon-amt">${fmt(amt)} earned</div>
+    </div>`).join("");
+
+  drawActivityChart();
+}
+
+function drawActivityChart(){
+  const canvas=document.getElementById("activity-chart");
+  if (!canvas || !window.Chart) return;
+  // build last 30 day buckets
+  const days=[]; const today=new Date();
+  for (let i=29;i>=0;i--){ const d=new Date(today); d.setDate(d.getDate()-i); days.push(d.toISOString().split("T")[0]); }
+  const orderCounts = days.map(d=>allOrders.filter(o=>o.date===d).length);
+  const signupCounts= days.map(d=>allUsers.filter(u=>u.createdAt && new Date(u.createdAt).toISOString().split("T")[0]===d).length);
+  const labels=days.map(d=>new Date(d+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}));
+
+  if (activityChart) activityChart.destroy();
+  activityChart=new Chart(canvas,{
+    data:{ labels, datasets:[
+      { type:"bar",  label:"Orders",  data:orderCounts,  backgroundColor:"#00b8ff", borderRadius:3 },
+      { type:"line", label:"Signups", data:signupCounts, borderColor:"#00e5a0", borderWidth:2, pointRadius:2, tension:0.3 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:"#7a7a8a", font:{size:10,family:"JetBrains Mono"}, boxWidth:10 } } },
+      scales:{
+        x:{ ticks:{ color:"#7a7a8a", font:{size:9,family:"JetBrains Mono"}, maxRotation:0, autoSkip:true, maxTicksLimit:8 }, grid:{display:false} },
+        y:{ ticks:{ color:"#7a7a8a", font:{size:10,family:"JetBrains Mono"}, precision:0 }, grid:{color:"#1e1e26"}, beginAtZero:true },
+      }
+    }
+  });
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
@@ -287,8 +666,8 @@ function renderLeaderboard(){
     <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:${i===0?"#00e5a008":"var(--bg2)"};border:1px solid ${i===0?"var(--green)":"var(--border)"};border-radius:10px;margin-bottom:8px">
       <div style="font-size:20px;width:28px;text-align:center">${medals[i]||`#${i+1}`}</div>
       <div style="flex:1">
-        <div style="font-weight:700;color:var(--text)">${u.name}</div>
-        <div style="font-size:10px;color:var(--muted)">${u.email}</div>
+        <div style="font-weight:700;color:var(--text)">${u.name||""}</div>
+        <div style="font-size:10px;color:var(--muted)">${u.email||""}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:${i===0?"var(--green)":"var(--dim)"}">${fmt(u.commission)}</div>
@@ -303,10 +682,12 @@ function renderLeaderboard(){
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(t){
-  ["users","orders","leaderboard"].forEach(id=>{
+  ["users","orders","breakdown","analytics","leaderboard"].forEach(id=>{
     document.getElementById("view-"+id).style.display=id===t?"block":"none";
     document.getElementById("tab-"+id).className="tab"+(id===t?" active":"");
   });
+  if (t==="breakdown") renderBreakdown();
+  if (t==="analytics") renderAnalytics();
 }
 
 // ── Export CSVs ───────────────────────────────────────────────────────────────
@@ -315,14 +696,14 @@ function exportUsers(){
   allUsers.forEach(u=>{
     const uOrders=allOrders.filter(o=>o.userId===u.id);
     const comm=uOrders.reduce((s,o)=>s+(o.commission||0),0);
-    rows.push([u.name,u.email,uOrders.length,comm.toFixed(2),new Date(u.createdAt).toLocaleDateString()]);
+    rows.push([u.name,u.email,uOrders.length,comm.toFixed(2),u.createdAt?new Date(u.createdAt).toLocaleDateString():""]);
   });
   downloadCSV(rows,"ninja-tracker-users.csv");
 }
 
 function exportOrders(){
   const rows=[["Date","User","Email","Type","Lines","Commission","Note","Source"]];
-  [...allOrders].sort((a,b)=>b.id-a.id).forEach(o=>{
+  [...allOrders].sort((a,b)=> new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date)).forEach(o=>{
     const user=allUsers.find(u=>u.id===o.userId);
     rows.push([o.date,user?.name||"",user?.email||"",o.type,
       (o.regularLines||0)+(o.homeLines||0),(o.commission||0).toFixed(2),
