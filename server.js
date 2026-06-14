@@ -28,6 +28,11 @@ const UserSchema = new mongoose.Schema({
   password:  String,
   token:     String,            // legacy single-token field (kept for backward compatibility)
   tokens:    { type: [String], default: [] },  // one token per logged-in device
+  settings:  {                  // per-user prefs that sync across devices
+    weekGoal:       { type: Number, default: 0 },
+    monthGoal:      { type: Number, default: 0 },
+    hourlySchedule: { type: String, default: "5x8" },
+  },
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -175,7 +180,20 @@ app.get("/data", authMiddleware, async (req, res) => {
       Order.find({ userId:uid }).sort({ createdAt:-1 }).lean(),
       Paycheck.find({ userId:uid }).lean(),
     ]);
-    res.json({ orders, paychecks });
+    res.json({ orders, paychecks, settings: req.user.settings || {} });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Save per-user settings (goals + hourly schedule) so they sync across devices
+app.post("/settings", authMiddleware, async (req, res) => {
+  try {
+    const { weekGoal, monthGoal, hourlySchedule } = req.body;
+    req.user.settings = req.user.settings || {};
+    if (weekGoal       !== undefined) req.user.settings.weekGoal       = Number(weekGoal) || 0;
+    if (monthGoal      !== undefined) req.user.settings.monthGoal      = Number(monthGoal) || 0;
+    if (hourlySchedule !== undefined) req.user.settings.hourlySchedule = hourlySchedule;
+    await req.user.save();
+    res.json({ success:true, settings:req.user.settings });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
