@@ -307,4 +307,73 @@ app.get("/admin/orders", async (req, res) => {
   res.json(orders);
 });
 
+// ── Admin management routes ─────────────────────────────────────────────────────
+function adminAuth(req, res, next) {
+  if (req.headers["x-admin-key"] !== "ninja2026admin") return res.status(403).json({ error:"Forbidden" });
+  next();
+}
+
+// Delete a user account + all their data (cascade)
+app.delete("/admin/users/:id", adminAuth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    await Order.deleteMany({ userId:id });
+    await Paycheck.deleteMany({ userId:id });
+    await User.deleteOne({ _id:id });
+    console.log(`[ADMIN DELETE USER] ${id}`);
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Reset a user's password (admin sets it); also logs them out everywhere
+app.post("/admin/users/:id/password", adminAuth, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error:"Missing password" });
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error:"User not found" });
+    user.password = hashPassword(password);
+    user.tokens = [];
+    user.token  = undefined;
+    await user.save();
+    console.log(`[ADMIN RESET PW] ${user.email}`);
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Force-log-out a user (clear all device tokens)
+app.post("/admin/users/:id/logout", adminAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error:"User not found" });
+    user.tokens = [];
+    user.token  = undefined;
+    await user.save();
+    console.log(`[ADMIN FORCE LOGOUT] ${user.email}`);
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Edit any order (recompute commission server-side)
+app.put("/admin/orders/:id", adminAuth, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error:"Not found" });
+    const { userId, _id, ...fields } = req.body;   // never let userId/_id be overwritten
+    Object.assign(order, fields);
+    order.commission = calcCommission(order);
+    order.breakdown  = buildBreakdown(order);
+    await order.save();
+    res.json({ success:true, order });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Delete any order
+app.delete("/admin/orders/:id", adminAuth, async (req, res) => {
+  try {
+    await Order.deleteOne({ _id:req.params.id });
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
 app.listen(PORT, () => console.log(`Ninja Tracker running on port ${PORT}`));
