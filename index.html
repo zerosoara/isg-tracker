@@ -110,9 +110,23 @@
     font-size: 13px; font-family: 'JetBrains Mono', monospace;
     outline: none; width: 100%;
     transition: border-color .15s;
+    color-scheme: dark;                /* native widgets (calendar, spinners) render light, not dark-on-dark */
   }
   input:focus, select:focus, textarea:focus { border-color: var(--green); }
   textarea { resize: vertical; min-height: 60px; }
+  /* make the native calendar button clearly visible + easy to hit (green tint) */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(64%) sepia(89%) saturate(500%) hue-rotate(110deg);
+    cursor: pointer; opacity: 1; padding: 2px; border-radius: 4px;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover { background: var(--bg3); }
+  /* visible dropdown chevron on selects */
+  select {
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%2300e5a0' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 28px;
+  }
 
   .row { display: flex; gap: 12px; flex-wrap: wrap; }
   .divider { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
@@ -835,7 +849,9 @@ const R = { newLine1:25, newLineN:15, reactivation:10, homeLine:10, irisAlly:10,
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 function applyPreset(type) {
+  const keepDate = document.getElementById("ob-date").value;   // presets must NOT change the date
   resetBuilder();
+  document.getElementById("ob-date").value = keepDate || today();
   if (type === 'single') {
     document.getElementById("ob-lines").value = "1";
     obAcct.autopay = true;
