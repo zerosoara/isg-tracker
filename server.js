@@ -5,7 +5,13 @@ const mongoose = require("mongoose");
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://zerosoara3:DestroyISG25!@ninja.utdoxfb.mongodb.net/ninjatracker?appName=Ninja";
+
+// Connection string comes ONLY from the environment. No credentials in code.
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error("FATAL: MONGO_URI environment variable is not set. Set it in the Render dashboard.");
+  process.exit(1);
+}
 
 app.use(cors());
 app.use(express.json());
@@ -20,9 +26,20 @@ const UserSchema = new mongoose.Schema({
   email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
   name:      { type: String, required: true, trim: true },
   password:  String,
-  token:     String,
+  token:     String,            // legacy single-token field (kept for backward compatibility)
+  tokens:    { type: [String], default: [] },  // one token per logged-in device
   createdAt: { type: Date, default: Date.now },
 });
+
+// Keep at most this many active device tokens per user (oldest dropped first).
+const MAX_TOKENS = 10;
+// Add a fresh token for a new device WITHOUT invalidating existing devices.
+function addToken(user) {
+  const t = genToken();
+  user.tokens = (user.tokens || []).concat(t).slice(-MAX_TOKENS);
+  user.token  = t;             // keep legacy field populated too
+  return t;
+}
 
 const OrderSchema = new mongoose.Schema({
   userId:       { type: String, required: true },
@@ -60,7 +77,8 @@ function genToken() {
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.replace("Bearer ", "");
   if (!token) return res.status(401).json({ error: "No token" });
-  const user = await User.findOne({ token });
+  // Match the token in the per-device list OR the legacy single-token field.
+  const user = await User.findOne({ $or: [{ tokens: token }, { token }] });
   if (!user) return res.status(401).json({ error: "Invalid token" });
   req.user = user;
   next();
@@ -122,14 +140,15 @@ app.post("/auth/signup", async (req, res) => {
     if (!email || !password || !name) return res.status(400).json({ error:"Missing fields" });
     const exists = await User.findOne({ email: email.toLowerCase().trim() });
     if (exists) return res.status(409).json({ error:"Email already registered" });
-    const user = await User.create({
+    const user = new User({
       email: email.toLowerCase().trim(),
       name:  name.trim(),
       password: hashPassword(password),
-      token: genToken(),
     });
+    const token = addToken(user);
+    await user.save();
     console.log(`[SIGNUP] ${user.email}`);
-    res.json({ token:user.token, name:user.name, email:user.email, id:user._id });
+    res.json({ token, name:user.name, email:user.email, id:user._id });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
@@ -141,10 +160,10 @@ app.post("/auth/login", async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user || user.password !== hashPassword(password))
       return res.status(401).json({ error:"Invalid email or password" });
-    user.token = genToken();
+    const token = addToken(user);   // new device token; existing devices stay logged in
     await user.save();
     console.log(`[LOGIN] ${user.email}`);
-    res.json({ token:user.token, name:user.name, email:user.email, id:user._id });
+    res.json({ token, name:user.name, email:user.email, id:user._id });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
@@ -250,15 +269,16 @@ app.post("/auth/reset", async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) return res.status(404).json({ error:"Email not found" });
     user.password = hashPassword(password);
-    user.token    = genToken();
+    user.tokens   = [];             // password changed: log out all other devices
+    const token   = addToken(user);
     await user.save();
     console.log(`[RESET] ${user.email}`);
-    res.json({ token:user.token, name:user.name, email:user.email, id:user._id });
+    res.json({ token, name:user.name, email:user.email, id:user._id });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 app.get("/admin/users", async (req, res) => {
   if (req.headers["x-admin-key"] !== "ninja2026admin") return res.status(403).json({ error:"Forbidden" });
-  const users = await User.find({}, { password:0, token:0 }).lean();
+  const users = await User.find({}, { password:0, token:0, tokens:0 }).lean();
   res.json(users);
 });
 
