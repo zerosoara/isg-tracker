@@ -474,6 +474,10 @@
         <div class="pill-val" id="pill-diff">+$0.00</div>
         <div class="pill-lbl">Difference</div>
       </div>
+      <div class="pill" style="border:1px solid #facc1528">
+        <div class="pill-val" id="pill-hourly">+$0.00</div>
+        <div class="pill-lbl">vs Hourly</div>
+      </div>
       </div>
     </div>
   </div>
@@ -802,6 +806,22 @@ let weekGoal  = localStorage.getItem("weekGoal")  || "";
 let monthGoal = localStorage.getItem("monthGoal") || "";
 let weekChart = null;
 let monthChart= null;
+let paceChart = null;
+
+// ── Hourly / "beat your hourly" settings ────────────────────────────────────────
+const HOURLY_RATE = 15;  // $/hr reference
+let hourlySchedule = localStorage.getItem("hourlySchedule") || "5x8";
+function scheduleInfo(){
+  return hourlySchedule === "4x10"
+    ? { key:"4x10", days:4, hrsPerDay:10, dailyTarget:10*HOURLY_RATE, weeklyTarget:40*HOURLY_RATE, label:"4 days × 10 hrs" }
+    : { key:"5x8",  days:5, hrsPerDay:8,  dailyTarget:8*HOURLY_RATE,  weeklyTarget:40*HOURLY_RATE, label:"5 days × 8 hrs" };
+}
+function setSchedule(key){
+  hourlySchedule = key;
+  localStorage.setItem("hourlySchedule", key);
+  renderGoals();
+  updatePills();
+}
 
 // ── Rates ────────────────────────────────────────────────────────────────────
 const R = { newLine1:25, newLineN:15, reactivation:10, homeLine:10, irisAlly:10, tablet:10, watch:5, protection:2 };
@@ -1144,6 +1164,18 @@ function updatePills(){
   pd.style.color=delta<-0.01?"var(--red)":delta>0.01?"var(--green)":"var(--muted)";
   document.getElementById("pill-diff").closest(".pill").style.borderColor=
     delta<-0.01?"#ff6b6b28":delta>0.01?"#00e5a028":"#55555528";
+
+  // vs Hourly — this week's commission against scheduled hourly pay so far
+  const sched=scheduleInfo();
+  const dow=new Date(today()+"T12:00:00").getDay();   // 0=Sun..6=Sat
+  const dayIdx=dow===0?7:dow;                          // 1=Mon..7=Sun
+  const schedDaysElapsed=Math.min(dayIdx,sched.days);
+  const targetSoFar=schedDaysElapsed*sched.dailyTarget;
+  const hDelta=cw.earned-targetSoFar;
+  const ph=document.getElementById("pill-hourly");
+  ph.textContent=(hDelta>=0?"+":"")+fmt(hDelta);
+  ph.style.color=hDelta>=0?"var(--green)":"var(--red)";
+  ph.closest(".pill").style.borderColor=hDelta>=0?"#00e5a028":"#ff6b6b28";
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -1386,7 +1418,65 @@ function renderGoals(){
   const onTrack=wg?projected>=wg:true;
   const neededPerDay=wg&&daysLeft>0?Math.max(0,wg-cwData.earned)/daysLeft:0;
 
+  // ── Beat Your Hourly (current week, per scheduled day) ──
+  const sched=scheduleInfo();
+  const cwOrders=(wd[cw]&&wd[cw].orders)||[];
+  const cwByDay={};
+  cwOrders.forEach(o=>{ cwByDay[o.date]=(cwByDay[o.date]||0)+o.commission; });
+  const dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const todayStr=today();
+  const weekDays=[];
+  for(let i=0;i<7;i++){
+    const dd=new Date(cw+"T12:00:00"); dd.setDate(dd.getDate()+i);
+    const ds=`${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,"0")}-${String(dd.getDate()).padStart(2,"0")}`;
+    weekDays.push({ name:dayNames[i], date:ds, earned:cwByDay[ds]||0, isWork:i<sched.days });
+  }
+  const weekEarned=(wd[cw]&&wd[cw].earned)||0;
+  const weekTargetDelta=weekEarned-sched.weeklyTarget;
+  // cumulative pace series for the chart
+  let runActual=0, workCount=0;
+  const paceLabels=[], paceActual=[], paceTarget=[];
+  weekDays.forEach(d=>{
+    if(d.isWork) workCount++;
+    runActual+=d.earned;
+    paceLabels.push(d.name);
+    paceTarget.push(workCount*sched.dailyTarget);
+    paceActual.push(d.date<=todayStr?runActual:null);
+  });
+  const schedBtn=(key,lbl,daily)=>`<button onclick="setSchedule('${key}')" style="flex:1;padding:9px;border-radius:9px;cursor:pointer;font-family:inherit;font-weight:700;line-height:1.3;background:${hourlySchedule===key?'#00e5a015':'var(--bg3)'};border:1px solid ${hourlySchedule===key?'var(--green)':'var(--border2)'};color:${hourlySchedule===key?'var(--green)':'var(--muted)'}"><span style="font-size:11px">${lbl}</span><br><span style="font-size:13px">$${daily}/day</span></button>`;
+
   el.innerHTML=`
+    <div class="card glow" style="margin-bottom:12px">
+      <div class="card-title">💪 Beat Your Hourly</div>
+      <div class="row" style="gap:7px;margin-bottom:12px">
+        ${schedBtn("5x8","5 days × 8 hrs",sched.key==="5x8"?sched.dailyTarget:8*HOURLY_RATE)}
+        ${schedBtn("4x10","4 days × 10 hrs",sched.key==="4x10"?sched.dailyTarget:10*HOURLY_RATE)}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--green);letter-spacing:-.03em">${fmt(weekEarned)}</div>
+          <div class="lbl" style="margin-top:2px">this week · hourly target ${fmt(sched.weeklyTarget)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;font-weight:700;color:${weekTargetDelta>=0?"var(--green)":"var(--red)"}">${weekTargetDelta>=0?"+":""}${fmt(weekTargetDelta)}</div>
+          <div class="lbl">${weekTargetDelta>=0?"beating hourly 🔥":"vs hourly"}</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:160px"><canvas id="pace-chart"></canvas></div>
+      <div style="margin-top:14px">
+        ${weekDays.filter(d=>d.isWork||d.earned>0).map(d=>{
+          const beat=d.earned>=sched.dailyTarget;
+          return `<div class="wvg-row">
+            <div class="wvg-head">
+              <span style="color:var(--dim)">${d.name}${!d.isWork?` <span style="color:var(--muted);font-size:9px">(off)</span>`:""}</span>
+              <span style="font-weight:700;color:${beat&&d.isWork?"var(--green)":"var(--muted)"}">${fmt(d.earned)}${d.isWork?` / ${fmt(sched.dailyTarget)}`:""}${beat&&d.isWork?" ✓":""}</span>
+            </div>
+            ${d.isWork?`<div class="wvg-track"><div class="wvg-fill" style="width:${Math.min(100,(d.earned/sched.dailyTarget)*100)}%;background:${beat?"var(--green)":"var(--orange)"}"></div></div>`:""}
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+
     ${orders.length?`
     <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
       <div class="stats-grid">
@@ -1505,8 +1595,29 @@ function renderGoals(){
 
   // Draw charts after DOM renders
   requestAnimationFrame(()=>{
+    drawPaceChart(paceLabels,paceActual,paceTarget);
     drawWeekChart(ws,wd,wg);
     drawMonthChart(ms,md,mg);
+  });
+}
+
+function drawPaceChart(labels,actual,target){
+  const canvas=document.getElementById("pace-chart"); if(!canvas) return;
+  if(paceChart) paceChart.destroy();
+  paceChart=new Chart(canvas,{
+    type:"line",
+    data:{ labels, datasets:[
+      { label:"You", data:actual, borderColor:"#00e5a0", borderWidth:2, pointBackgroundColor:"#00e5a0", fill:true, backgroundColor:"rgba(0,229,160,0.08)", tension:0.25, spanGaps:false },
+      { label:"Hourly pace", data:target, borderColor:"#facc15", borderWidth:1, borderDash:[4,3], pointRadius:0, fill:false, tension:0 }
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, labels:{ color:"#7a7a8a", font:{size:10,family:"JetBrains Mono"}, boxWidth:10 } } },
+      scales:{
+        x:{ ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"}}, grid:{display:false} },
+        y:{ ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`}, grid:{color:"#1e1e26"} }
+      }
+    }
   });
 }
 
