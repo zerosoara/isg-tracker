@@ -821,6 +821,13 @@ function setSchedule(key){
   localStorage.setItem("hourlySchedule", key);
   renderGoals();
   updatePills();
+  saveSettings();
+}
+// Push goals + schedule to the server so they sync across devices
+async function saveSettings(){
+  if (!authToken) return;
+  try { await apiPost("/settings", { weekGoal:Number(weekGoal)||0, monthGoal:Number(monthGoal)||0, hourlySchedule }); }
+  catch(e) { /* stays cached locally; will resync next save */ }
 }
 
 // ── Rates ────────────────────────────────────────────────────────────────────
@@ -928,6 +935,15 @@ async function loadData(){
     // (edit/delete buttons). Mirror _id -> id so those actions target the right order.
     orders    = (d.orders || []).map(o => ({ ...o, id: o._id }));
     paychecks = d.paychecks || [];
+    // Apply settings that sync from the server (goals + hourly schedule)
+    if (d.settings) {
+      weekGoal  = d.settings.weekGoal  ? String(d.settings.weekGoal)  : "";
+      monthGoal = d.settings.monthGoal ? String(d.settings.monthGoal) : "";
+      if (d.settings.hourlySchedule) hourlySchedule = d.settings.hourlySchedule;
+      localStorage.setItem("weekGoal", weekGoal);
+      localStorage.setItem("monthGoal", monthGoal);
+      localStorage.setItem("hourlySchedule", hourlySchedule);
+    }
     setSyncStatus(true);
     updateAll();
   } catch(e){
@@ -1231,8 +1247,8 @@ function renderHistory(){
           </div>
           <div class="order-actions">
             <div class="order-amt">${fmt(o.commission)}</div>
-            <button class="btn-edit" onclick="startEdit(${o.id})">Edit</button>
-            <button class="btn-del" onclick="confirmDelete(${o.id},this)">✕</button>
+            <button class="btn-edit" onclick="startEdit('${o.id}')">Edit</button>
+            <button class="btn-del" onclick="confirmDelete('${o.id}',this)">✕</button>
           </div>
         </div>`).join("")}
     </div>`;
@@ -1249,7 +1265,7 @@ function confirmDelete(id,btn){
     const row=document.createElement("div");
     row.className="del-confirm";
     row.style.cssText="display:flex;gap:5px;margin-top:3px";
-    row.innerHTML=`<button class="btn-danger" onclick="deleteOrder(${id})">Delete</button><button class="btn-ghost" onclick="cancelDelete()">No</button>`;
+    row.innerHTML=`<button class="btn-danger" onclick="deleteOrder('${id}')">Delete</button><button class="btn-ghost" onclick="cancelDelete()">No</button>`;
     btn.parentNode.appendChild(row);
   }
 }
@@ -1663,15 +1679,15 @@ function drawMonthChart(ms,md,mg){
 function setWeekGoal(){
   weekGoal=document.getElementById("wg-input").value;
   localStorage.setItem("weekGoal",weekGoal);
-  renderGoals();
+  renderGoals(); saveSettings();
 }
-function clearWeekGoal(){ weekGoal=""; localStorage.removeItem("weekGoal"); renderGoals(); }
+function clearWeekGoal(){ weekGoal=""; localStorage.removeItem("weekGoal"); renderGoals(); saveSettings(); }
 function setMonthGoal(){
   monthGoal=document.getElementById("mg-input").value;
   localStorage.setItem("monthGoal",monthGoal);
-  renderGoals();
+  renderGoals(); saveSettings();
 }
-function clearMonthGoal(){ monthGoal=""; localStorage.removeItem("monthGoal"); renderGoals(); }
+function clearMonthGoal(){ monthGoal=""; localStorage.removeItem("monthGoal"); renderGoals(); saveSettings(); }
 
 // ── Update All ────────────────────────────────────────────────────────────────
 function updateAll(){
