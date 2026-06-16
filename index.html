@@ -662,6 +662,13 @@
       <div class="row">
         <div><div class="lbl">Orders</div><div id="today-count" style="font-size:22px;font-weight:700;color:var(--dim)"></div></div>
         <div><div class="lbl">Earned</div><div id="today-total" style="font-size:22px;font-weight:700;color:var(--green)"></div></div>
+        <div><div class="lbl">Total Lines</div><div id="today-lines" style="font-size:22px;font-weight:700;color:var(--text)"></div></div>
+      </div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <div><div class="lbl">Cell Lines</div><div id="today-cell" style="font-size:16px;font-weight:700;color:var(--blue)"></div></div>
+        <div><div class="lbl">Home Lines</div><div id="today-home" style="font-size:16px;font-weight:700;color:var(--orange)"></div></div>
+        <div><div class="lbl">Tablet Lines</div><div id="today-tablet" style="font-size:16px;font-weight:700;color:var(--purple)"></div></div>
+        <div><div class="lbl">Watch Lines</div><div id="today-watch" style="font-size:16px;font-weight:700;color:var(--pink)"></div></div>
       </div>
     </div>
   </div>
@@ -1153,6 +1160,15 @@ function updateTodayCard(){
     card.style.display="block";
     document.getElementById("today-count").textContent=todayOrders.length;
     document.getElementById("today-total").textContent=fmt(todayOrders.reduce((s,o)=>s+o.commission,0));
+    const cell  =todayOrders.reduce((s,o)=>s+(o.regularLines||0),0);
+    const home  =todayOrders.reduce((s,o)=>s+(o.homeLines||0),0);
+    const tablet=todayOrders.reduce((s,o)=>s+((o.perDevice&&o.perDevice.tabletWithLine)||0),0);
+    const watch =todayOrders.reduce((s,o)=>s+((o.perDevice&&o.perDevice.watchWithLine)||0),0);
+    document.getElementById("today-cell").textContent=cell;
+    document.getElementById("today-home").textContent=home;
+    document.getElementById("today-tablet").textContent=tablet;
+    document.getElementById("today-watch").textContent=watch;
+    document.getElementById("today-lines").textContent=cell+home+tablet+watch;
   } else { card.style.display="none"; }
 }
 
