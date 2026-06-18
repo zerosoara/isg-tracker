@@ -312,6 +312,15 @@
   .preset-btn:hover { border-color: var(--green); color: var(--green); }
   .preset-btn .preset-amt { font-size: 13px; font-weight: 700; color: var(--green); display: block; margin-bottom: 2px; }
   .preset-btn .preset-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .preset-btn .cp-del { position:absolute; top:-6px; right:-6px; background:var(--red); color:#08080a; border:none; border-radius:50%; width:16px; height:16px; font-size:11px; line-height:1; cursor:pointer; font-family:inherit; display:none; }
+  .preset-btn.cp { position:relative; }
+  .preset-btn.cp:hover .cp-del { display:block; }
+  .save-preset-btn { margin-top:8px; background:var(--bg3); border:1px dashed var(--border2); color:var(--dim); border-radius:8px; padding:8px 12px; font-size:11px; font-family:'JetBrains Mono',monospace; cursor:pointer; width:100%; }
+  .save-preset-btn:hover { border-color:var(--green); color:var(--green); }
+  /* theme swatches */
+  .theme-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .theme-sw { width:34px; height:34px; border-radius:8px; cursor:pointer; border:2px solid var(--border2); position:relative; }
+  .theme-sw.on { border-color:var(--text); box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--text); }
 
   /* TABLET/WATCH */
   .addon-row { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
@@ -482,11 +491,11 @@
       </div>
       <div class="pill" style="border:1px solid #00b8ff28">
         <div class="pill-val" style="color:var(--blue)" id="pill-total">$0.00</div>
-        <div class="pill-lbl">All Time</div>
+        <div class="pill-lbl">This Month</div>
       </div>
       <div class="pill" style="border:1px solid #55555528">
-        <div class="pill-val" id="pill-diff">+$0.00</div>
-        <div class="pill-lbl">Difference</div>
+        <div class="pill-val" id="pill-diff" style="font-size:12px">$0 / $0</div>
+        <div class="pill-lbl">Paid / Tracked</div>
       </div>
       <div class="pill" style="border:1px solid #facc1528">
         <div class="pill-val" id="pill-hourly">+$0.00</div>
@@ -541,6 +550,8 @@
             <span class="preset-lbl">Reactivation</span>
           </button>
         </div>
+        <div class="presets-row" id="custom-presets" style="margin-top:7px"></div>
+        <button type="button" class="save-preset-btn" onclick="saveCurrentPreset()">＋ Save current order as preset</button>
       </div>
 
       <div class="row" style="margin-bottom:4px">
@@ -657,7 +668,7 @@
         <button class="btn-primary" id="submit-btn" onclick="submitOrder()" disabled>Submit Order</button>
       </div>
     </div>
-    <div class="card" id="today-card" style="display:none;background:#0d0d10">
+    <div class="card" id="today-card" style="display:none;background:var(--bg3)">
       <div class="card-title">Today</div>
       <div class="row">
         <div><div class="lbl">Orders</div><div id="today-count" style="font-size:22px;font-weight:700;color:var(--dim)"></div></div>
@@ -823,6 +834,8 @@ let editingId = null;
 let editingPc = null;
 let obType    = "new";
 let obAcct    = { aarp:false, autopay:false };
+let theme     = localStorage.getItem("theme") || "ninja";
+let customPresets = JSON.parse(localStorage.getItem("customPresets") || "[]");
 let weekGoal  = localStorage.getItem("weekGoal")  || "";
 let monthGoal = localStorage.getItem("monthGoal") || "";
 let weekChart = null;
@@ -831,24 +844,169 @@ let paceChart = null;
 
 // ── Hourly / "beat your hourly" settings ────────────────────────────────────────
 const HOURLY_RATE = 15;  // $/hr reference
-let hourlySchedule = localStorage.getItem("hourlySchedule") || "5x8";
-function scheduleInfo(){
-  return hourlySchedule === "4x10"
-    ? { key:"4x10", days:4, hrsPerDay:10, dailyTarget:10*HOURLY_RATE, weeklyTarget:40*HOURLY_RATE, label:"4 days × 10 hrs" }
-    : { key:"5x8",  days:5, hrsPerDay:8,  dailyTarget:8*HOURLY_RATE,  weeklyTarget:40*HOURLY_RATE, label:"5 days × 8 hrs" };
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+// Work schedules. days = JS getDay() numbers (0=Sun..6=Sat). hrs = hours per work day.
+// NOTE: Schedules B & C work-days were assumed Thu–Sun (source notes were partly blank/cut off).
+//       If wrong, just fix the days[] arrays below — nothing else needs changing.
+const SCHEDULES = {
+  A: { hrs:8,  days:[1,2,3,4,0], time:"9:00 AM–5:00 PM" },   // Mon,Tue,Wed,Thu,Sun (off Fri,Sat)
+  B: { hrs:10, days:[1,4,5,0],   time:"9:30 AM–7:30 PM" },   // Mon,Thu,Fri,Sun (off Tue,Wed,Sat)
+  C: { hrs:10, days:[1,4,5,0],   time:"10:30 AM–8:30 PM" },  // Mon,Thu,Fri,Sun (off Tue,Wed,Sat)
+  D: { hrs:10, days:[1,2,5,6],   time:"9:00 AM–7:00 PM" },   // Mon,Tue,Fri,Sat (off Wed,Thu,Sun)
+  E: { hrs:10, days:[1,2,5,6],   time:"9:30 AM–7:30 PM" },   // Mon,Tue,Fri,Sat (off Wed,Thu,Sun)
+  F: { hrs:10, days:[1,2,5,6],   time:"10:30 AM–8:30 PM" },  // Mon,Tue,Fri,Sat (off Wed,Thu,Sun)
+};
+function migrateSchedule(v){
+  if (SCHEDULES[v]) return v;
+  if (v === "4x10") return "E";
+  if (v === "5x8")  return "A";
+  return "A";
 }
+let hourlySchedule = migrateSchedule(localStorage.getItem("hourlySchedule") || "A");
+let taxRate    = Number(localStorage.getItem("taxRate")) || 25;
+let attendance = JSON.parse(localStorage.getItem("attendance") || "{}");  // { "YYYY-MM-DD": hoursWorked }
+
+function scheduleInfo(key){
+  const k = SCHEDULES[key||hourlySchedule] ? (key||hourlySchedule) : "A";
+  const s = SCHEDULES[k];
+  const order = [1,2,3,4,5,6,0];                       // Mon-first
+  const work = order.filter(d=>s.days.includes(d));
+  const off  = order.filter(d=>!s.days.includes(d));
+  return {
+    key:k, hrs:s.hrs, days:s.days, time:s.time,
+    dayCount:s.days.length,
+    dailyTarget:s.hrs*HOURLY_RATE,
+    weeklyTarget:s.days.length*s.hrs*HOURLY_RATE,
+    workLabel:work.map(d=>DOW[d]).join(", "),
+    offLabel: off.map(d=>DOW[d]).join(", "),
+  };
+}
+function isWorkday(ds){ return SCHEDULES[hourlySchedule].days.includes(new Date(ds+"T12:00:00").getDay()); }
+function scheduledHours(ds){ return isWorkday(ds) ? SCHEDULES[hourlySchedule].hrs : 0; }
+// hours actually worked that date: attendance override if set, else the scheduled hours
+function effectiveHours(ds){ return (ds in attendance) ? (Number(attendance[ds])||0) : scheduledHours(ds); }
+
 function setSchedule(key){
-  hourlySchedule = key;
-  localStorage.setItem("hourlySchedule", key);
-  renderGoals();
-  updatePills();
-  saveSettings();
+  hourlySchedule = migrateSchedule(key);
+  localStorage.setItem("hourlySchedule", hourlySchedule);
+  renderGoals(); updatePills(); saveSettings();
 }
-// Push goals + schedule to the server so they sync across devices
+function setAttendance(ds, hours){
+  if (hours === null) delete attendance[ds];          // clear override → back to scheduled
+  else attendance[ds] = Number(hours)||0;
+  localStorage.setItem("attendance", JSON.stringify(attendance));
+  renderGoals(); updatePills(); saveSettings();
+}
+function markOff(ds){ setAttendance(ds, 0); }
+function markWorked(ds){ setAttendance(ds, null); }
+function markLate(ds){
+  const sched = SCHEDULES[hourlySchedule].hrs;
+  const v = prompt(`How many hours did you actually work on ${fmtDate(ds)}? (scheduled ${sched})`, effectiveHours(ds));
+  if (v === null) return;
+  setAttendance(ds, Math.max(0, Math.min(24, Number(v)||0)));
+}
+function setTaxRate(v){
+  taxRate = Math.max(0, Math.min(100, Number(v)||0));
+  localStorage.setItem("taxRate", taxRate);
+  renderGoals(); saveSettings();
+}
+// Push goals + schedule + tax + attendance + theme + presets so they sync across devices
 async function saveSettings(){
   if (!authToken) return;
-  try { await apiPost("/settings", { weekGoal:Number(weekGoal)||0, monthGoal:Number(monthGoal)||0, hourlySchedule }); }
+  try { await apiPost("/settings", { weekGoal:Number(weekGoal)||0, monthGoal:Number(monthGoal)||0, hourlySchedule, taxRate, attendance, theme, customPresets }); }
   catch(e) { /* stays cached locally; will resync next save */ }
+}
+
+// ── Themes ──────────────────────────────────────────────────────────────────────
+const THEME_BASE = { "--bg":"#08080a","--bg2":"#0f0f13","--bg3":"#141418","--border":"#1e1e26","--border2":"#2a2a35","--text":"#e8e8f0","--muted":"#7a7a8a","--dim":"#9a9aaa","--green":"#00e5a0","--blue":"#00b8ff","--purple":"#a78bfa","--orange":"#fb923c","--yellow":"#facc15","--pink":"#f472b6","--red":"#ff6b6b" };
+const THEMES = {
+  ninja:   { name:"Ninja",   sw:"#00e5a0", vars:{} },
+  blue:    { name:"Blue",    sw:"#00b8ff", vars:{ "--green":"#00b8ff" } },
+  pink:    { name:"Pink",    sw:"#f472b6", vars:{ "--green":"#f472b6" } },
+  purple:  { name:"Purple",  sw:"#a78bfa", vars:{ "--green":"#a78bfa" } },
+  amber:   { name:"Amber",   sw:"#fbbf24", vars:{ "--green":"#fbbf24", "--yellow":"#fde047" } },
+  crimson: { name:"Crimson", sw:"#ff5d5d", vars:{ "--green":"#ff5d5d" } },
+  light:   { name:"Light",   sw:"#ffffff", vars:{ "--bg":"#f4f4f7","--bg2":"#ffffff","--bg3":"#ececf2","--border":"#dcdce4","--border2":"#c8c8d2","--text":"#1a1a22","--muted":"#6a6a78","--dim":"#3c3c46","--green":"#0d9488" } },
+};
+function applyTheme(name){
+  const t = THEMES[name] || THEMES.ninja;
+  const merged = { ...THEME_BASE, ...t.vars };
+  const r = document.documentElement;
+  Object.keys(merged).forEach(k=>r.style.setProperty(k, merged[k]));
+}
+function setTheme(name){
+  theme = THEMES[name] ? name : "ninja";
+  localStorage.setItem("theme", theme);
+  applyTheme(theme);
+  renderGoals();
+  saveSettings();
+}
+applyTheme(theme);   // apply immediately (even on the login screen)
+
+// ── Custom presets ──────────────────────────────────────────────────────────────
+function builderConfig(){
+  return {
+    type: obType,
+    regularLines: parseInt(document.getElementById("ob-lines").value)||0,
+    homeLines:    parseInt(document.getElementById("ob-home").value)||0,
+    perAccount: { ...obAcct },
+    perDevice: {
+      device:         parseInt(document.getElementById("ob-device").value)||0,
+      protection:     parseInt(document.getElementById("ob-protection").value)||0,
+      accessories:    parseInt(document.getElementById("ob-accessories").value)||0,
+      irisAlly:       parseInt(document.getElementById("ob-iris").value)||0,
+      tabletWithLine: parseInt(document.getElementById("ob-tablet").value)||0,
+      watchWithLine:  parseInt(document.getElementById("ob-watch").value)||0,
+    },
+  };
+}
+function saveCurrentPreset(){
+  const cfg = builderConfig();
+  const pd = cfg.perDevice;
+  const hasSomething = (cfg.regularLines+cfg.homeLines)>0 || pd.device||pd.irisAlly||pd.tabletWithLine||pd.watchWithLine||pd.accessories;
+  if (!hasSomething) { showToast("Build an order first, then save it as a preset"); return; }
+  const name = prompt("Name this preset (e.g. '2 lines + watch'):");
+  if (!name) return;
+  customPresets.push({ name:name.trim().slice(0,24), cfg });
+  localStorage.setItem("customPresets", JSON.stringify(customPresets));
+  renderCustomPresets(); saveSettings();
+  showToast("✓ Preset saved");
+}
+function applyCustomPreset(i){
+  const p = customPresets[i]; if(!p) return;
+  const keepDate = document.getElementById("ob-date").value;
+  resetBuilder();
+  document.getElementById("ob-date").value = keepDate || today();
+  const c = p.cfg, d = c.perDevice||{};
+  setType(c.type||"new");
+  document.getElementById("ob-lines").value       = c.regularLines||0;
+  document.getElementById("ob-home").value        = c.homeLines||0;
+  document.getElementById("ob-device").value      = d.device||0;
+  document.getElementById("ob-protection").value  = d.protection||0;
+  document.getElementById("ob-accessories").value = d.accessories||0;
+  document.getElementById("ob-iris").value        = d.irisAlly||0;
+  document.getElementById("ob-tablet").value      = d.tabletWithLine||0;
+  document.getElementById("ob-watch").value       = d.watchWithLine||0;
+  if (c.perAccount&&c.perAccount.aarp)    toggleAcct("aarp");
+  if (c.perAccount&&c.perAccount.autopay) toggleAcct("autopay");
+  updateCalc();
+}
+function deleteCustomPreset(i, ev){
+  if (ev) ev.stopPropagation();
+  customPresets.splice(i,1);
+  localStorage.setItem("customPresets", JSON.stringify(customPresets));
+  renderCustomPresets(); saveSettings();
+}
+function renderCustomPresets(){
+  const el = document.getElementById("custom-presets"); if(!el) return;
+  el.innerHTML = customPresets.map((p,i)=>{
+    let amt=0; try { amt=calcCommission(p.cfg); } catch(_){}
+    return `<button class="preset-btn cp" onclick="applyCustomPreset(${i})">
+      <span class="cp-del" onclick="deleteCustomPreset(${i},event)">×</span>
+      <span class="preset-amt">$${amt}</span>
+      <span class="preset-lbl">${(p.name||'preset').replace(/[<>]/g,'')}</span>
+    </button>`;
+  }).join("");
 }
 
 // ── Rates ────────────────────────────────────────────────────────────────────
@@ -962,10 +1120,19 @@ async function loadData(){
     if (d.settings) {
       weekGoal  = d.settings.weekGoal  ? String(d.settings.weekGoal)  : "";
       monthGoal = d.settings.monthGoal ? String(d.settings.monthGoal) : "";
-      if (d.settings.hourlySchedule) hourlySchedule = d.settings.hourlySchedule;
+      if (d.settings.hourlySchedule) hourlySchedule = migrateSchedule(d.settings.hourlySchedule);
+      if (d.settings.taxRate != null) taxRate = Number(d.settings.taxRate) || 0;
+      if (d.settings.attendance && typeof d.settings.attendance === "object") attendance = d.settings.attendance;
+      if (d.settings.theme && THEMES[d.settings.theme]) { theme = d.settings.theme; applyTheme(theme); }
+      if (Array.isArray(d.settings.customPresets)) customPresets = d.settings.customPresets;
       localStorage.setItem("weekGoal", weekGoal);
       localStorage.setItem("monthGoal", monthGoal);
       localStorage.setItem("hourlySchedule", hourlySchedule);
+      localStorage.setItem("taxRate", taxRate);
+      localStorage.setItem("attendance", JSON.stringify(attendance));
+      localStorage.setItem("theme", theme);
+      localStorage.setItem("customPresets", JSON.stringify(customPresets));
+      renderCustomPresets();
     }
     setSyncStatus(true);
     updateAll();
@@ -1197,28 +1364,42 @@ function getMonthlyData(){
   return months;
 }
 
+// ── Hourly helpers (schedule + attendance aware) ────────────────────────────────
+function fmt0(n){ return "$"+Math.round(Number(n)||0).toLocaleString(); }
+// dates of the current week (Mon→Sun) up to and including today
+function weekDatesUpToToday(){
+  const ws=getWeekStart(today()), t=today(), out=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(ws+"T12:00:00"); d.setDate(d.getDate()+i);
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    if(ds<=t) out.push(ds);
+  }
+  return out;
+}
+// hours actually worked so far this week (respects off/late overrides)
+function weekHoursWorkedSoFar(){ return weekDatesUpToToday().reduce((s,ds)=>s+effectiveHours(ds),0); }
+// what the hourly wage would have paid for those hours so far
+function weekHourlyTargetSoFar(){ return weekHoursWorkedSoFar()*HOURLY_RATE; }
+
 // ── Header Pills ──────────────────────────────────────────────────────────────
 function updatePills(){
   const wd=getWeeklyData();
   const cw=wd[getWeekStart(today())]||{earned:0};
+  const md=getMonthlyData();
+  const monthEarned=(md[monthKey(today())]||{earned:0}).earned;
   const totalEarned=orders.reduce((s,o)=>s+o.commission,0);
   const totalPaid=paychecks.reduce((s,p)=>s+Number(p.amount),0);
-  const delta=totalEarned-totalPaid;
 
   document.getElementById("pill-week").textContent=fmt(cw.earned);
-  document.getElementById("pill-total").textContent=fmt(totalEarned);
-  const pd=document.getElementById("pill-diff");
-  pd.textContent=(delta>=0?"+":"")+fmt(delta);
-  pd.style.color=delta<-0.01?"var(--red)":delta>0.01?"var(--green)":"var(--muted)";
-  document.getElementById("pill-diff").closest(".pill").style.borderColor=
-    delta<-0.01?"#ff6b6b28":delta>0.01?"#00e5a028":"#55555528";
+  document.getElementById("pill-total").textContent=fmt(monthEarned);
 
-  // vs Hourly — this week's commission against scheduled hourly pay so far
-  const sched=scheduleInfo();
-  const dow=new Date(today()+"T12:00:00").getDay();   // 0=Sun..6=Sat
-  const dayIdx=dow===0?7:dow;                          // 1=Mon..7=Sun
-  const schedDaysElapsed=Math.min(dayIdx,sched.days);
-  const targetSoFar=schedDaysElapsed*sched.dailyTarget;
+  // Paid / Tracked (all-time received vs all-time commission), like the Paychecks tab
+  const pd=document.getElementById("pill-diff");
+  pd.textContent=`${fmt0(totalPaid)} / ${fmt0(totalEarned)}`;
+  pd.style.color = totalPaid+0.01 < totalEarned ? "var(--yellow)" : "var(--green)";  // yellow = still owed
+
+  // vs Hourly — this week's commission vs what your hours would've paid hourly so far
+  const targetSoFar=weekHourlyTargetSoFar();
   const hDelta=cw.earned-targetSoFar;
   const ph=document.getElementById("pill-hourly");
   ph.textContent=(hDelta>=0?"+":"")+fmt(hDelta);
@@ -1466,62 +1647,130 @@ function renderGoals(){
   const onTrack=wg?projected>=wg:true;
   const neededPerDay=wg&&daysLeft>0?Math.max(0,wg-cwData.earned)/daysLeft:0;
 
-  // ── Beat Your Hourly (current week, per scheduled day) ──
+  // ── Beat Your Hourly (schedule + attendance aware) ──
   const sched=scheduleInfo();
   const cwOrders=(wd[cw]&&wd[cw].orders)||[];
   const cwByDay={};
   cwOrders.forEach(o=>{ cwByDay[o.date]=(cwByDay[o.date]||0)+o.commission; });
+  const allByDay={};
+  orders.forEach(o=>{ allByDay[o.date]=(allByDay[o.date]||0)+o.commission; });
   const dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const todayStr=today();
   const weekDays=[];
   for(let i=0;i<7;i++){
     const dd=new Date(cw+"T12:00:00"); dd.setDate(dd.getDate()+i);
     const ds=`${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,"0")}-${String(dd.getDate()).padStart(2,"0")}`;
-    weekDays.push({ name:dayNames[i], date:ds, earned:cwByDay[ds]||0, isWork:i<sched.days });
+    const schedHrs=scheduledHours(ds), effHrs=effectiveHours(ds), isWork=schedHrs>0;
+    let status="none";
+    if(isWork){
+      if(ds in attendance && effHrs===0)        status="off";
+      else if(ds in attendance && effHrs<schedHrs) status="late";
+      else status="worked";
+    }
+    weekDays.push({ name:dayNames[i], date:ds, earned:cwByDay[ds]||0, schedHrs, effHrs, isWork, status, target:effHrs*HOURLY_RATE, past:ds<=todayStr });
   }
   const weekEarned=(wd[cw]&&wd[cw].earned)||0;
-  const weekTargetDelta=weekEarned-sched.weeklyTarget;
-  // cumulative pace series for the chart
-  let runActual=0, workCount=0;
+  const weeklyTargetEff=weekDays.reduce((s,d)=>s+d.target,0);
+  const weekTargetDelta=weekEarned-weeklyTargetEff;
+  // cumulative pace series (earned vs effective hourly target)
+  let runActual=0, runTarget=0;
   const paceLabels=[], paceActual=[], paceTarget=[];
   weekDays.forEach(d=>{
-    if(d.isWork) workCount++;
-    runActual+=d.earned;
+    runActual+=d.earned; runTarget+=d.target;
     paceLabels.push(d.name);
-    paceTarget.push(workCount*sched.dailyTarget);
-    paceActual.push(d.date<=todayStr?runActual:null);
+    paceTarget.push(runTarget);
+    paceActual.push(d.past?runActual:null);
   });
-  const schedBtn=(key,lbl,daily)=>`<button onclick="setSchedule('${key}')" style="flex:1;padding:9px;border-radius:9px;cursor:pointer;font-family:inherit;font-weight:700;line-height:1.3;background:${hourlySchedule===key?'#00e5a015':'var(--bg3)'};border:1px solid ${hourlySchedule===key?'var(--green)':'var(--border2)'};color:${hourlySchedule===key?'var(--green)':'var(--muted)'}"><span style="font-size:11px">${lbl}</span><br><span style="font-size:13px">$${daily}/day</span></button>`;
+  // your real $/hr this week
+  const hoursWorked=weekHoursWorkedSoFar();
+  const realRate=hoursWorked>0?weekEarned/hoursWorked:null;
+  // beat-hourly streak: consecutive worked days hitting target, newest first
+  let streak=0;
+  { const d=new Date(todayStr+"T12:00:00");
+    for(let i=0;i<90;i++){
+      const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      const eff=effectiveHours(ds);
+      if(scheduledHours(ds)>0 && eff>0){
+        if((allByDay[ds]||0) >= eff*HOURLY_RATE) streak++; else break;
+      }
+      d.setDate(d.getDate()-1);
+    }
+  }
+  // best day this week
+  let bestD=null,bestA=0; weekDays.forEach(d=>{ if(d.earned>bestA){bestA=d.earned;bestD=d;} });
+  const schedOpts=Object.keys(SCHEDULES).map(k=>{
+    const si=scheduleInfo(k);
+    return `<option value="${k}" ${k===sched.key?"selected":""}>Schedule ${k} · ${si.hrs}h · ${si.workLabel}</option>`;
+  }).join("");
+  const attBtns=(d)=>{
+    const b=(lbl,active,onclick,color)=>`<button onclick="${onclick}" style="padding:3px 8px;border-radius:6px;font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;background:${active?color+'22':'var(--bg3)'};border:1px solid ${active?color:'var(--border2)'};color:${active?color:'var(--muted)'}">${lbl}</button>`;
+    return `<div style="display:flex;gap:5px;margin-top:4px">
+      ${b("✓ Worked", d.status==="worked", `markWorked('${d.date}')`, "var(--green)")}
+      ${b("Off",      d.status==="off",    `markOff('${d.date}')`,    "var(--red)")}
+      ${b(d.status==="late"?`Late ${d.effHrs}h`:"Late", d.status==="late", `markLate('${d.date}')`, "var(--orange)")}
+    </div>`;
+  };
 
   el.innerHTML=`
     <div class="card glow" style="margin-bottom:12px">
       <div class="card-title">💪 Beat Your Hourly</div>
-      <div class="row" style="gap:7px;margin-bottom:12px">
-        ${schedBtn("5x8","5 days × 8 hrs",sched.key==="5x8"?sched.dailyTarget:8*HOURLY_RATE)}
-        ${schedBtn("4x10","4 days × 10 hrs",sched.key==="4x10"?sched.dailyTarget:10*HOURLY_RATE)}
+      <div class="field" style="margin-bottom:12px">
+        <label class="lbl">Your Schedule</label>
+        <select onchange="setSchedule(this.value)">${schedOpts}</select>
+        <div class="lbl" style="margin-top:6px;line-height:1.5">Works <b style="color:var(--dim)">${sched.workLabel}</b> · ${sched.hrs}h/day · off <b style="color:var(--dim)">${sched.offLabel}</b> · target ${fmt(sched.dailyTarget)}/day</div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
         <div>
           <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--green);letter-spacing:-.03em">${fmt(weekEarned)}</div>
-          <div class="lbl" style="margin-top:2px">this week · hourly target ${fmt(sched.weeklyTarget)}</div>
+          <div class="lbl" style="margin-top:2px">this week · hourly target ${fmt(weeklyTargetEff)}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:18px;font-weight:700;color:${weekTargetDelta>=0?"var(--green)":"var(--red)"}">${weekTargetDelta>=0?"+":""}${fmt(weekTargetDelta)}</div>
           <div class="lbl">${weekTargetDelta>=0?"beating hourly 🔥":"vs hourly"}</div>
         </div>
       </div>
+      <div class="pace-grid" style="margin-bottom:10px">
+        <div class="pace-item"><div class="lbl">Your $/hr</div><div style="font-size:14px;font-weight:700;margin-top:3px;color:${realRate==null?'var(--muted)':realRate>=HOURLY_RATE?'var(--green)':'var(--red)'}">${realRate==null?"—":fmt(realRate)}</div></div>
+        <div class="pace-item"><div class="lbl">Hours worked</div><div style="font-size:14px;font-weight:700;margin-top:3px;color:var(--dim)">${hoursWorked}h</div></div>
+        <div class="pace-item"><div class="lbl">Streak</div><div style="font-size:14px;font-weight:700;margin-top:3px;color:var(--orange)">${streak>0?`🔥 ${streak}d`:"—"}</div></div>
+      </div>
       <div class="chart-wrap" style="height:160px"><canvas id="pace-chart"></canvas></div>
       <div style="margin-top:14px">
         ${weekDays.filter(d=>d.isWork||d.earned>0).map(d=>{
-          const beat=d.earned>=sched.dailyTarget;
+          const beat=d.target>0 && d.earned>=d.target;
+          const tag = d.status==="off"?` <span style="color:var(--red);font-size:9px">OFF</span>`
+                    : d.status==="late"?` <span style="color:var(--orange);font-size:9px">LATE ${d.effHrs}h</span>`
+                    : !d.isWork?` <span style="color:var(--muted);font-size:9px">(not scheduled)</span>`:"";
           return `<div class="wvg-row">
             <div class="wvg-head">
-              <span style="color:var(--dim)">${d.name}${!d.isWork?` <span style="color:var(--muted);font-size:9px">(off)</span>`:""}</span>
-              <span style="font-weight:700;color:${beat&&d.isWork?"var(--green)":"var(--muted)"}">${fmt(d.earned)}${d.isWork?` / ${fmt(sched.dailyTarget)}`:""}${beat&&d.isWork?" ✓":""}</span>
+              <span style="color:var(--dim)">${d.name}${tag}</span>
+              <span style="font-weight:700;color:${beat?"var(--green)":"var(--muted)"}">${fmt(d.earned)}${d.target>0?` / ${fmt(d.target)}`:""}${beat?" ✓":""}</span>
             </div>
-            ${d.isWork?`<div class="wvg-track"><div class="wvg-fill" style="width:${Math.min(100,(d.earned/sched.dailyTarget)*100)}%;background:${beat?"var(--green)":"var(--orange)"}"></div></div>`:""}
+            ${d.target>0?`<div class="wvg-track"><div class="wvg-fill" style="width:${Math.min(100,(d.earned/d.target)*100)}%;background:${beat?"var(--green)":"var(--orange)"}"></div></div>`:""}
+            ${d.isWork?attBtns(d):""}
           </div>`;
         }).join("")}
+      </div>
+      <div class="lbl" style="margin-top:12px;line-height:1.6">📅 This week: ${fmt(weekEarned)} vs ${fmt(weeklyTargetEff)} hourly = <span style="color:${weekTargetDelta>=0?'var(--green)':'var(--red)'}">${weekTargetDelta>=0?"+":""}${fmt(weekTargetDelta)}</span>${bestD&&bestA>0?` · best day ${bestD.name} ${fmt(bestA)}`:""}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">💰 Tax Set-Aside</div>
+      <div class="field" style="flex:0 0 130px;margin-bottom:10px">
+        <label class="lbl">Set aside %</label>
+        <input type="number" id="tax-input" min="0" max="100" value="${taxRate}" onchange="setTaxRate(this.value)"/>
+      </div>
+      <div class="pace-grid">
+        <div class="pace-item"><div class="lbl">This Week</div><div style="font-size:15px;font-weight:700;margin-top:3px;color:var(--yellow)">${fmt(weekEarned*taxRate/100)}</div></div>
+        <div class="pace-item"><div class="lbl">This Month</div><div style="font-size:15px;font-weight:700;margin-top:3px;color:var(--yellow)">${fmt(((md[monthKey(today())]||{earned:0}).earned)*taxRate/100)}</div></div>
+        <div class="pace-item"><div class="lbl">All Time</div><div style="font-size:15px;font-weight:700;margin-top:3px;color:var(--yellow)">${fmt(totalEarned*taxRate/100)}</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">🎨 Theme</div>
+      <div class="theme-row">
+        ${Object.keys(THEMES).map(k=>`<div class="theme-sw ${theme===k?'on':''}" title="${THEMES[k].name}" onclick="setTheme('${k}')" style="background:${THEMES[k].sw}"></div>`).join("")}
       </div>
     </div>
 
@@ -1649,22 +1898,34 @@ function renderGoals(){
   });
 }
 
+// chart colors follow the active theme
+function cssVar(n){ return (getComputedStyle(document.documentElement).getPropertyValue(n)||"").trim() || "#888"; }
+function hexA(hex,a){
+  const h=hex.replace("#",""); if(h.length<6) return hex;
+  return `rgba(${parseInt(h.substr(0,2),16)},${parseInt(h.substr(2,2),16)},${parseInt(h.substr(4,2),16)},${a})`;
+}
+function chartAxes(){
+  const tick=cssVar("--muted"), grid=cssVar("--border");
+  return {
+    x:{ ticks:{color:tick,font:{size:10,family:"JetBrains Mono"}}, grid:{display:false} },
+    y:{ ticks:{color:tick,font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`}, grid:{color:grid} }
+  };
+}
+
 function drawPaceChart(labels,actual,target){
   const canvas=document.getElementById("pace-chart"); if(!canvas) return;
   if(paceChart) paceChart.destroy();
+  const accent=cssVar("--green"), pace=cssVar("--orange");
   paceChart=new Chart(canvas,{
     type:"line",
     data:{ labels, datasets:[
-      { label:"You", data:actual, borderColor:"#00e5a0", borderWidth:2, pointBackgroundColor:"#00e5a0", fill:true, backgroundColor:"rgba(0,229,160,0.08)", tension:0.25, spanGaps:false },
-      { label:"Hourly pace", data:target, borderColor:"#facc15", borderWidth:1, borderDash:[4,3], pointRadius:0, fill:false, tension:0 }
+      { label:"You", data:actual, borderColor:accent, borderWidth:2, pointBackgroundColor:accent, fill:true, backgroundColor:hexA(accent,0.10), tension:0.25, spanGaps:false },
+      { label:"Hourly pace", data:target, borderColor:pace, borderWidth:1, borderDash:[4,3], pointRadius:0, fill:false, tension:0 }
     ]},
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:true, labels:{ color:"#7a7a8a", font:{size:10,family:"JetBrains Mono"}, boxWidth:10 } } },
-      scales:{
-        x:{ ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"}}, grid:{display:false} },
-        y:{ ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`}, grid:{color:"#1e1e26"} }
-      }
+      plugins:{ legend:{ display:true, labels:{ color:cssVar("--muted"), font:{size:10,family:"JetBrains Mono"}, boxWidth:10 } } },
+      scales:chartAxes()
     }
   });
 }
@@ -1672,19 +1933,17 @@ function drawPaceChart(labels,actual,target){
 function drawWeekChart(ws,wd,wg){
   const canvas=document.getElementById("week-chart"); if(!canvas) return;
   if(weekChart) weekChart.destroy();
+  const accent=cssVar("--green"), blue=cssVar("--blue");
   const labels=ws.slice(0,8).reverse().map(w=>new Date(w+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}));
   const data=ws.slice(0,8).reverse().map(w=>wd[w].earned);
   weekChart=new Chart(canvas,{
     type:"bar",
-    data:{ labels, datasets:[{ data, backgroundColor:data.map((v,i)=>wg&&v>=wg?"#00e5a0":"#00b8ff"), borderRadius:4 }] },
+    data:{ labels, datasets:[{ data, backgroundColor:data.map(v=>wg&&v>=wg?accent:blue), borderRadius:4 }] },
     options:{
       responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},
-        annotation: wg ? { annotations: { goal: { type:'line', yMin:wg, yMax:wg, borderColor:'#facc15', borderWidth:1, borderDash:[4,3] } } } : {}
+        annotation: wg ? { annotations: { goal: { type:'line', yMin:wg, yMax:wg, borderColor:cssVar("--yellow"), borderWidth:1, borderDash:[4,3] } } } : {}
       },
-      scales:{
-        x:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"}},grid:{display:false}},
-        y:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`},grid:{color:"#1e1e26"}}
-      }
+      scales:chartAxes()
     }
   });
 }
@@ -1693,17 +1952,15 @@ function drawMonthChart(ms,md,mg){
   const canvas=document.getElementById("month-chart"); if(!canvas) return;
   if(monthChart) monthChart.destroy();
   if(ms.length<2) return;
+  const accent=cssVar("--green");
   const labels=ms.slice(0,6).reverse().map(mk=>monthLabel(mk));
   const data=ms.slice(0,6).reverse().map(mk=>md[mk].earned);
   monthChart=new Chart(canvas,{
     type:"line",
-    data:{ labels, datasets:[{ data, borderColor:"#00e5a0", borderWidth:2, pointBackgroundColor:"#00e5a0", fill:true, backgroundColor:"rgba(0,229,160,0.08)", tension:0.3 }] },
+    data:{ labels, datasets:[{ data, borderColor:accent, borderWidth:2, pointBackgroundColor:accent, fill:true, backgroundColor:hexA(accent,0.10), tension:0.3 }] },
     options:{
       responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"}},grid:{display:false}},
-        y:{ticks:{color:"#7a7a8a",font:{size:10,family:"JetBrains Mono"},callback:v=>`$${v}`},grid:{color:"#1e1e26"}}
-      }
+      scales:chartAxes()
     }
   });
 }
@@ -1738,6 +1995,7 @@ function updateAll(){
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById("ob-date").value=today();
 document.getElementById("pc-weekstart").value=getWeekStart(today());
+renderCustomPresets();
 
 // Check for existing session
 if (authToken && authUser) {
