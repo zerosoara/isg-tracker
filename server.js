@@ -31,7 +31,13 @@ const UserSchema = new mongoose.Schema({
   settings:  {                  // per-user prefs that sync across devices
     weekGoal:       { type: Number, default: 0 },
     monthGoal:      { type: Number, default: 0 },
-    hourlySchedule: { type: String, default: "5x8" },
+    hourlySchedule: { type: String, default: "A" },
+    taxRate:        { type: Number, default: 25 },
+    theme:          { type: String, default: "ninja" },
+    // attendance: { "YYYY-MM-DD": hoursWorked }  — off day = 0, late = fewer hours
+    attendance:     { type: mongoose.Schema.Types.Mixed, default: {} },
+    // customPresets: [{ name, cfg:{...order config} }]
+    customPresets:  { type: mongoose.Schema.Types.Mixed, default: [] },
   },
   createdAt: { type: Date, default: Date.now },
 });
@@ -187,11 +193,21 @@ app.get("/data", authMiddleware, async (req, res) => {
 // Save per-user settings (goals + hourly schedule) so they sync across devices
 app.post("/settings", authMiddleware, async (req, res) => {
   try {
-    const { weekGoal, monthGoal, hourlySchedule } = req.body;
+    const { weekGoal, monthGoal, hourlySchedule, taxRate, attendance, theme, customPresets } = req.body;
     req.user.settings = req.user.settings || {};
     if (weekGoal       !== undefined) req.user.settings.weekGoal       = Number(weekGoal) || 0;
     if (monthGoal      !== undefined) req.user.settings.monthGoal      = Number(monthGoal) || 0;
     if (hourlySchedule !== undefined) req.user.settings.hourlySchedule = hourlySchedule;
+    if (taxRate        !== undefined) req.user.settings.taxRate        = Number(taxRate) || 0;
+    if (theme          !== undefined) req.user.settings.theme          = theme;
+    if (attendance     !== undefined) {
+      req.user.settings.attendance = attendance;       // full map; small enough to send whole
+      req.user.markModified("settings.attendance");    // Mixed type needs this to persist
+    }
+    if (customPresets  !== undefined) {
+      req.user.settings.customPresets = customPresets;
+      req.user.markModified("settings.customPresets");
+    }
     await req.user.save();
     res.json({ success:true, settings:req.user.settings });
   } catch(e) { res.status(500).json({ error:e.message }); }
