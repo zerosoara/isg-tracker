@@ -12,8 +12,8 @@
     --bg:       #08080a;
     --bg2:      #0f0f13;
     --bg3:      #141418;
-    --border:   #1e1e26;
-    --border2:  #2a2a35;
+    --border:   #20202a;
+    --border2:  #34343f;
     --green:    #00e5a0;
     --blue:     #00b8ff;
     --purple:   #a78bfa;
@@ -22,8 +22,8 @@
     --pink:     #f472b6;
     --red:      #ff6b6b;
     --text:     #e8e8f0;
-    --muted:    #7a7a8a;
-    --dim:      #9a9aaa;
+    --muted:    #8e8e9e;
+    --dim:      #b6b6c4;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -92,9 +92,10 @@
   /* CARDS */
   .card {
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 12px; padding: 15px;
+    border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.25);
   }
-  .card.glow { border-color: #00e5a025; box-shadow: 0 0 0 1px #00e5a010; }
+  .card.glow { border-color: var(--green); box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 18%, transparent), 0 2px 10px color-mix(in srgb, var(--green) 10%, transparent); }
   .card-title {
     font-size: 9px; text-transform: uppercase; letter-spacing: .12em;
     color: var(--muted); margin-bottom: 12px; font-weight: 600;
@@ -412,6 +413,49 @@
 <div class="loading" id="loading">CONNECTING...</div>
 <div class="toast" id="toast"></div>
 
+<!-- DAILY TALLY MODAL -->
+<div id="tally-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);align-items:flex-start;justify-content:center;padding:24px 12px;z-index:60;overflow-y:auto">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:20px;width:100%;max-width:440px">
+    <div class="card-title" style="font-size:16px">📋 Daily Tally</div>
+    <div class="lbl" style="margin-bottom:12px;line-height:1.5">Drop your end-of-day totals — it auto-calculates commission. Enter # of new-activation <b>deals</b> and total <b>new lines</b> for correct 1st-line ($25) vs extra-line ($15) math.</div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">Date</label><input type="date" id="t-date"/></div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">New deals</label><input type="number" id="t-deals" min="0" placeholder="0" oninput="calcTally()"/></div>
+      <div class="field"><label class="lbl">New lines (total)</label><input type="number" id="t-newlines" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">Reactivation lines</label><input type="number" id="t-react" min="0" placeholder="0" oninput="calcTally()"/></div>
+      <div class="field"><label class="lbl">Home lines</label><input type="number" id="t-home" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">Autopay (count)</label><input type="number" id="t-autopay" min="0" placeholder="0" oninput="calcTally()"/></div>
+      <div class="field"><label class="lbl">AARP (count)</label><input type="number" id="t-aarp" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">New devices</label><input type="number" id="t-device" min="0" placeholder="0" oninput="calcTally()"/></div>
+      <div class="field"><label class="lbl">Protection</label><input type="number" id="t-prot" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">Accessories</label><input type="number" id="t-acc" min="0" placeholder="0" oninput="calcTally()"/></div>
+      <div class="field"><label class="lbl">Iris Ally</label><input type="number" id="t-iris" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <div class="field"><label class="lbl">Tablet (w/ line)</label><input type="number" id="t-tablet" min="0" placeholder="0" oninput="calcTally()"/></div>
+      <div class="field"><label class="lbl">Watch (w/ line)</label><input type="number" id="t-watch" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--bg3);border-radius:8px">
+      <span class="lbl">Day total</span>
+      <span id="t-total" style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--green)">$0.00</span>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-ghost" style="flex:1" onclick="closeTally()">Cancel</button>
+      <button class="btn-primary" style="flex:1" id="t-save" onclick="submitTally()">Log Day</button>
+    </div>
+  </div>
+</div>
+
 <!-- AUTH SCREEN -->
 <div class="auth-screen" id="auth-screen">
   <div class="auth-box">
@@ -546,12 +590,13 @@
             <span class="preset-lbl">3 Lines + ACH</span>
           </button>
           <button class="preset-btn" onclick="applyPreset('reactivation')">
-            <span class="preset-amt">$10</span>
-            <span class="preset-lbl">Reactivation</span>
+            <span class="preset-amt">$11</span>
+            <span class="preset-lbl">Reactivation + ACH</span>
           </button>
         </div>
         <div class="presets-row" id="custom-presets" style="margin-top:7px"></div>
         <button type="button" class="save-preset-btn" onclick="saveCurrentPreset()">＋ Save current order as preset</button>
+        <button type="button" class="save-preset-btn" style="margin-top:6px;border-style:solid;border-color:var(--green);color:var(--green)" onclick="openTally()">📋 Log a full day (end-of-day tally)</button>
       </div>
 
       <div class="row" style="margin-bottom:4px">
@@ -836,6 +881,8 @@ let obType    = "new";
 let obAcct    = { aarp:false, autopay:false };
 let theme     = localStorage.getItem("theme") || "ninja";
 let customPresets = JSON.parse(localStorage.getItem("customPresets") || "[]");
+let selectMode = false;
+let selectedOrders = new Set();
 let weekGoal  = localStorage.getItem("weekGoal")  || "";
 let monthGoal = localStorage.getItem("monthGoal") || "";
 let weekChart = null;
@@ -918,15 +965,15 @@ async function saveSettings(){
 }
 
 // ── Themes ──────────────────────────────────────────────────────────────────────
-const THEME_BASE = { "--bg":"#08080a","--bg2":"#0f0f13","--bg3":"#141418","--border":"#1e1e26","--border2":"#2a2a35","--text":"#e8e8f0","--muted":"#7a7a8a","--dim":"#9a9aaa","--green":"#00e5a0","--blue":"#00b8ff","--purple":"#a78bfa","--orange":"#fb923c","--yellow":"#facc15","--pink":"#f472b6","--red":"#ff6b6b" };
+const THEME_BASE = { "--bg":"#08080a","--bg2":"#0f0f13","--bg3":"#141418","--border":"#20202a","--border2":"#34343f","--text":"#e8e8f0","--muted":"#8e8e9e","--dim":"#b6b6c4","--green":"#00e5a0","--blue":"#00b8ff","--purple":"#a78bfa","--orange":"#fb923c","--yellow":"#facc15","--pink":"#f472b6","--red":"#ff6b6b" };
 const THEMES = {
   ninja:   { name:"Ninja",   sw:"#00e5a0", vars:{} },
-  blue:    { name:"Blue",    sw:"#00b8ff", vars:{ "--green":"#00b8ff" } },
-  pink:    { name:"Pink",    sw:"#f472b6", vars:{ "--green":"#f472b6" } },
-  purple:  { name:"Purple",  sw:"#a78bfa", vars:{ "--green":"#a78bfa" } },
+  blue:    { name:"Blue",    sw:"#00b8ff", vars:{ "--green":"#00b8ff", "--bg2":"#0d1015", "--border":"#18222b" } },
+  pink:    { name:"Pink",    sw:"#f472b6", vars:{ "--green":"#f472b6", "--bg2":"#120f12", "--border":"#241a22" } },
+  purple:  { name:"Purple",  sw:"#a78bfa", vars:{ "--green":"#a78bfa", "--bg2":"#100f16", "--border":"#1f1b2b" } },
   amber:   { name:"Amber",   sw:"#fbbf24", vars:{ "--green":"#fbbf24", "--yellow":"#fde047" } },
-  crimson: { name:"Crimson", sw:"#ff5d5d", vars:{ "--green":"#ff5d5d" } },
-  light:   { name:"Light",   sw:"#ffffff", vars:{ "--bg":"#f4f4f7","--bg2":"#ffffff","--bg3":"#ececf2","--border":"#dcdce4","--border2":"#c8c8d2","--text":"#1a1a22","--muted":"#6a6a78","--dim":"#3c3c46","--green":"#0d9488" } },
+  crimson: { name:"Crimson", sw:"#ff5d5d", vars:{ "--green":"#ff5d5d", "--bg2":"#130d0e", "--border":"#251a1b" } },
+  light:   { name:"Light",   sw:"#f0f0f4", vars:{ "--bg":"#eef0f4","--bg2":"#ffffff","--bg3":"#f4f5f8","--border":"#e0e2ea","--border2":"#cfd2dc","--text":"#16181f","--muted":"#5e6270","--dim":"#363a45","--green":"#0d9488","--blue":"#0284c7","--purple":"#7c3aed","--orange":"#ea7317","--pink":"#db2777" } },
 };
 function applyTheme(name){
   const t = THEMES[name] || THEMES.ninja;
@@ -1035,6 +1082,9 @@ function applyPreset(type) {
   } else if (type === 'reactivation') {
     document.getElementById("ob-lines").value = "1";
     setType("reactivation");
+    obAcct.autopay = true;
+    document.getElementById("tog-autopay").className = "toggle-btn on";
+    document.getElementById("tog-autopay").textContent = "✓ Autopay";
   }
   updateCalc();
 }
@@ -1202,7 +1252,9 @@ function updateCalc(){
   const comm = calcCommission(order);
   const bd   = buildBreakdown(order);
 
-  const valid = lines>0||home>0;
+  const iris2 = parseInt(document.getElementById("ob-iris").value)||0;
+  // Iris Ally / new devices / accessories are standalone-sellable; lines/home too. (Tablet/Watch need a line.)
+  const valid = lines>0||home>0||iris2>0||device>0||accInput>0;
   const commEl = document.getElementById("ob-commission");
   commEl.textContent = fmt(comm);
   commEl.style.color = valid?"var(--green)":"#333";
@@ -1240,7 +1292,8 @@ async function submitOrder(){
   const watch   = parseInt(document.getElementById("ob-watch").value)||0;
   const note    = document.getElementById("ob-note").value;
 
-  if(lines===0&&home===0) return;
+  // allow standalone Iris Ally / device / accessories; block only truly empty orders
+  if(!(lines>0||home>0||iris>0||device>0||acc>0)) return;
 
   const order = {
     date:dateVal, note, type:obType,
@@ -1294,7 +1347,8 @@ function resetBuilder(){
 function startEdit(id){
   const o=orders.find(x=>x.id===id); if(!o) return;
   editingId=id;
-  obType=o.type; obAcct={...o.perAccount};
+  // start from OFF so the toggleAcct() calls below correctly turn them ON (was double-toggling autopay off)
+  obType=o.type; obAcct={aarp:false,autopay:false};
   document.getElementById("ob-date").value=o.date;
   document.getElementById("ob-lines").value=o.regularLines;
   document.getElementById("ob-home").value=o.homeLines;
@@ -1431,7 +1485,25 @@ function renderHistory(){
   orders.forEach(o=>{ if(!byDay[o.date]) byDay[o.date]=[]; byDay[o.date].push(o); });
   const days=Object.keys(byDay).sort((a,b)=>b.localeCompare(a));
 
-  el.innerHTML=days.map(day=>{
+  const toolbar=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="sec-lbl" style="margin:0">${orders.length} order${orders.length!==1?"s":""}</div>
+      <button class="btn-ghost" onclick="toggleSelectMode()">${selectMode?"✕ Cancel":"☑ Select"}</button>
+    </div>
+    ${selectMode?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px">
+      <span id="bulk-count" style="font-size:12px;color:var(--dim)">${selectedOrders.size} selected</span>
+      <select id="bulk-preset" onchange="bulkApplyPreset(this.value);this.value=''" style="flex:1;min-width:130px">
+        <option value="">Change selected to…</option>
+        <option value="single">1 Line + ACH</option>
+        <option value="double">2 Lines + ACH</option>
+        <option value="triple">3 Lines + ACH</option>
+        <option value="reactivation">Reactivation + ACH</option>
+        ${customPresets.map((p,i)=>`<option value="c${i}">★ ${(p.name||'preset').replace(/[<>]/g,'')}</option>`).join("")}
+      </select>
+      <button class="btn-danger" onclick="bulkDelete()">Delete</button>
+    </div>`:""}`;
+
+  el.innerHTML=toolbar+days.map(day=>{
     const dos=byDay[day];
     const dt=dos.reduce((s,o)=>s+o.commission,0);
     return `<div class="day-block" style="margin-bottom:12px">
@@ -1439,8 +1511,25 @@ function renderHistory(){
         <span class="day-lbl">${fmtDate(day)}</span>
         <span class="day-total">${fmt(dt)}</span>
       </div>
-      ${dos.map(o=>`
-        <div class="order-row">
+      ${dos.map(o=>{
+        const cb=selectMode?`<input type="checkbox" ${selectedOrders.has(o.id)?"checked":""} onchange="toggleRowSelect('${o.id}',this)" style="width:auto;margin-right:10px;align-self:center;transform:scale(1.3)">`:"";
+        if(o.source==="tally"){
+          const tl=o.tally||{};
+          return `<div class="order-row">${cb}
+            <div style="flex:1">
+              <div class="order-tags">
+                <span class="tag" style="background:#facc1522;border:1px solid #facc1550;color:var(--yellow)">📋 Daily Tally</span>
+                ${tl.deals?`<span class="tag" style="background:#00e5a022;border:1px solid #00e5a050;color:var(--green)">${tl.deals} deal${tl.deals>1?"s":""}</span>`:""}
+                ${(o.regularLines||0)>0?`<span class="tag" style="background:#00b8ff22;border:1px solid #00b8ff50;color:var(--blue)">${o.regularLines} line${o.regularLines>1?"s":""}</span>`:""}
+                ${o.note?`<span style="font-size:10px;color:var(--muted);font-style:italic">${o.note}</span>`:""}
+              </div>
+              <div class="order-bd">${(o.breakdown||[]).map(b=>`<span style="color:${b.color}">${b.label} ${fmt(b.amt)}</span>`).join("")}</div>
+            </div>
+            <div class="order-actions"><div class="order-amt">${fmt(o.commission)}</div>${selectMode?"":`<button class="btn-del" onclick="confirmDelete('${o.id}',this)">✕</button>`}</div>
+          </div>`;
+        }
+        const actions=selectMode?"":`<button class="btn-edit" onclick="startEdit('${o.id}')">Edit</button><button class="btn-del" onclick="confirmDelete('${o.id}',this)">✕</button>`;
+        return `<div class="order-row">${cb}
           <div style="flex:1">
             <div class="order-tags">
               <span class="tag" style="background:${o.type==="reactivation"?"#a78bfa22":"#00e5a022"};border:1px solid ${o.type==="reactivation"?"#a78bfa50":"#00e5a050"};color:${o.type==="reactivation"?"var(--purple)":"var(--green)"}">${o.type==="reactivation"?"Reactivation":"New Activation"}</span>
@@ -1450,6 +1539,7 @@ function renderHistory(){
               ${o.perAccount&&o.perAccount.autopay?`<span class="tag" style="background:#facc1522;border:1px solid #facc1550;color:var(--yellow)">Autopay</span>`:""}
               ${(o.perDevice&&o.perDevice.device||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.device} device${o.perDevice.device>1?"s":""}</span>`:""}
               ${(o.perDevice&&o.perDevice.protection||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.protection} protection</span>`:""}
+              ${(o.perDevice&&o.perDevice.irisAlly||0)>0?`<span class="tag" style="background:#fb923c22;border:1px solid #fb923c50;color:var(--orange)">${o.perDevice.irisAlly} iris</span>`:""}
               ${(o.perDevice&&o.perDevice.accessories||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.accessories} accessories</span>`:""}
               ${o.source==="extension"?`<span class="tag" style="background:#00b8ff10;border:1px solid #00b8ff30;color:var(--blue)">auto</span>`:""}
               ${o.note?`<span style="font-size:10px;color:var(--muted);font-style:italic">${o.note}</span>`:""}
@@ -1460,12 +1550,108 @@ function renderHistory(){
           </div>
           <div class="order-actions">
             <div class="order-amt">${fmt(o.commission)}</div>
-            <button class="btn-edit" onclick="startEdit('${o.id}')">Edit</button>
-            <button class="btn-del" onclick="confirmDelete('${o.id}',this)">✕</button>
+            ${actions}
           </div>
-        </div>`).join("")}
+        </div>`;
+      }).join("")}
     </div>`;
   }).join("");
+}
+
+// ── Bulk select / edit ──────────────────────────────────────────────────────────
+function toggleSelectMode(){ selectMode=!selectMode; selectedOrders.clear(); renderHistory(); }
+function toggleRowSelect(id,cb){
+  if(cb.checked) selectedOrders.add(id); else selectedOrders.delete(id);
+  const c=document.getElementById("bulk-count"); if(c) c.textContent=`${selectedOrders.size} selected`;
+}
+function presetConfig(key){
+  const dev={device:0,protection:0,accessories:0,irisAlly:0,tabletWithLine:0,watchWithLine:0};
+  if(key==="single")       return {type:"new",regularLines:1,homeLines:0,perAccount:{aarp:false,autopay:true},perDevice:dev};
+  if(key==="double")       return {type:"new",regularLines:2,homeLines:0,perAccount:{aarp:false,autopay:true},perDevice:dev};
+  if(key==="triple")       return {type:"new",regularLines:3,homeLines:0,perAccount:{aarp:false,autopay:true},perDevice:dev};
+  if(key==="reactivation") return {type:"reactivation",regularLines:1,homeLines:0,perAccount:{aarp:false,autopay:true},perDevice:dev};
+  if(key[0]==="c"){ const p=customPresets[parseInt(key.slice(1))]; if(p) return {type:p.cfg.type,regularLines:p.cfg.regularLines||0,homeLines:p.cfg.homeLines||0,perAccount:{...p.cfg.perAccount},perDevice:{...dev,...p.cfg.perDevice}}; }
+  return null;
+}
+async function bulkApplyPreset(key){
+  if(!key||!selectedOrders.size) return;
+  const cfg=presetConfig(key); if(!cfg) return;
+  const ids=[...selectedOrders];
+  if(!confirm(`Change ${ids.length} selected order(s) to this preset?`)) return;
+  showToast(`Updating ${ids.length} order(s)…`);
+  try{
+    for(const id of ids){ await fetch(`${API}/orders/${id}`,{method:"PUT",headers:getHeaders(),body:JSON.stringify(cfg)}); }
+    selectMode=false; selectedOrders.clear();
+    await loadData(); showToast("✓ Orders updated");
+  }catch(e){ showToast("⚠ Could not update — check connection"); }
+}
+async function bulkDelete(){
+  if(!selectedOrders.size) return;
+  const ids=[...selectedOrders];
+  if(!confirm(`Delete ${ids.length} selected order(s)? This cannot be undone.`)) return;
+  try{
+    for(const id of ids){ await apiDelete(`/orders/${id}`); }
+    selectMode=false; selectedOrders.clear();
+    await loadData(); showToast("✓ Deleted");
+  }catch(e){ showToast("⚠ Could not delete — check connection"); }
+}
+
+// ── Daily Tally ─────────────────────────────────────────────────────────────────
+function tallyVals(){
+  const g=id=>parseInt(document.getElementById(id).value)||0;
+  return { date:document.getElementById("t-date").value||today(),
+    deals:g("t-deals"), newLines:g("t-newlines"), reactLines:g("t-react"), home:g("t-home"),
+    autopay:g("t-autopay"), aarp:g("t-aarp"), device:g("t-device"), protection:g("t-prot"),
+    accessories:g("t-acc"), iris:g("t-iris"), tablet:g("t-tablet"), watch:g("t-watch") };
+}
+function tallyCommission(v){
+  return v.deals*25 + Math.max(0,v.newLines-v.deals)*15 + v.reactLines*10 + v.home*10
+       + v.protection*2 + v.device*1 + v.accessories*1 + v.autopay*1 + v.aarp*1
+       + v.iris*10 + v.tablet*10 + v.watch*5;
+}
+function tallyBreakdown(v){
+  const it=[];
+  const first=Math.min(v.deals,v.newLines), extra=Math.max(0,v.newLines-v.deals);
+  if(first>0) it.push({label:`${first} 1st line`,amt:first*25,color:"var(--green)"});
+  if(extra>0) it.push({label:`+${extra} line`,amt:extra*15,color:"var(--blue)"});
+  if(v.reactLines>0) it.push({label:`React ${v.reactLines}`,amt:v.reactLines*10,color:"var(--purple)"});
+  if(v.home>0) it.push({label:`Home ${v.home}`,amt:v.home*10,color:"var(--orange)"});
+  if(v.protection>0) it.push({label:`Prot ${v.protection}`,amt:v.protection*2,color:"var(--pink)"});
+  if(v.device>0) it.push({label:`Dev ${v.device}`,amt:v.device,color:"var(--pink)"});
+  if(v.accessories>0) it.push({label:`Acc ${v.accessories}`,amt:v.accessories,color:"var(--pink)"});
+  if(v.autopay>0) it.push({label:`ACH ${v.autopay}`,amt:v.autopay,color:"var(--yellow)"});
+  if(v.aarp>0) it.push({label:`AARP ${v.aarp}`,amt:v.aarp,color:"var(--yellow)"});
+  if(v.iris>0) it.push({label:`Iris ${v.iris}`,amt:v.iris*10,color:"var(--orange)"});
+  if(v.tablet>0) it.push({label:`Tablet ${v.tablet}`,amt:v.tablet*10,color:"var(--blue)"});
+  if(v.watch>0) it.push({label:`Watch ${v.watch}`,amt:v.watch*5,color:"var(--purple)"});
+  return it;
+}
+function calcTally(){ document.getElementById("t-total").textContent=fmt(tallyCommission(tallyVals())); }
+function openTally(){
+  document.getElementById("t-date").value=today();
+  ["t-deals","t-newlines","t-react","t-home","t-autopay","t-aarp","t-device","t-prot","t-acc","t-iris","t-tablet","t-watch"].forEach(id=>document.getElementById(id).value="");
+  calcTally();
+  document.getElementById("tally-modal").style.display="flex";
+}
+function closeTally(){ document.getElementById("tally-modal").style.display="none"; }
+async function submitTally(){
+  const v=tallyVals(), total=tallyCommission(v);
+  if(total<=0){ showToast("Enter some numbers first"); return; }
+  const order={
+    date:v.date, type:"new", source:"tally",
+    regularLines:v.newLines+v.reactLines, homeLines:v.home,
+    perAccount:{aarp:v.aarp>0, autopay:v.autopay>0},
+    perDevice:{device:v.device,protection:v.protection,accessories:v.accessories,irisAlly:v.iris,tabletWithLine:v.tablet,watchWithLine:v.watch},
+    tally:{deals:v.deals,newLines:v.newLines,reactLines:v.reactLines,autopay:v.autopay,aarp:v.aarp},
+    note:`Daily tally${v.deals?` · ${v.deals} deals`:""}`,
+    commission:total, breakdown:tallyBreakdown(v),
+  };
+  const btn=document.getElementById("t-save"); btn.disabled=true; btn.textContent="Saving…";
+  try{
+    await apiPost("/orders",order);
+    closeTally(); await loadData(); showToast("✓ Day logged");
+  }catch(e){ showToast("⚠ Could not save — check connection"); }
+  btn.disabled=false; btn.textContent="Log Day";
 }
 
 let deleteConfirm=null;
