@@ -65,6 +65,7 @@ const OrderSchema = new mongoose.Schema({
   commission:   Number,
   breakdown:    Array,
   source:       String,
+  tally:        { type: mongoose.Schema.Types.Mixed },  // aggregate day-tally data (source==="tally")
   createdAt:    { type: Date, default: Date.now },
 });
 
@@ -249,8 +250,14 @@ app.post("/orders", authMiddleware, async (req, res) => {
       order = { ...raw, userId: uid };
     }
 
-    order.commission = calcCommission(order);
-    order.breakdown  = buildBreakdown(order);
+    if (order.source === "tally") {
+      // Daily tally mixes new + reactivation + multi-deal line math; trust the precomputed total.
+      order.commission = Number(raw.commission) || 0;
+      order.breakdown  = Array.isArray(raw.breakdown) ? raw.breakdown : [];
+    } else {
+      order.commission = calcCommission(order);
+      order.breakdown  = buildBreakdown(order);
+    }
     const saved = await Order.create(order);
     console.log(`[ORDER] ${req.user.email} — $${order.commission}`);
     res.json({ success:true, order:saved });
