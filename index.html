@@ -38,7 +38,9 @@
 
   /* HEADER */
   .header {
-    background: var(--bg2);
+    background:
+      radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--green) 12%, transparent), transparent 60%),
+      var(--bg2);
     border-bottom: 1px solid var(--border);
     padding: 14px 16px;
     position: sticky; top: 0; z-index: 100;
@@ -83,7 +85,8 @@
     letter-spacing: .04em; border-bottom: 2px solid transparent;
     transition: all .15s; white-space: nowrap; flex-shrink: 0;
   }
-  .nav-btn.active { color: var(--green); border-bottom-color: var(--green); }
+  .nav-btn.active { color: var(--green); border-bottom-color: var(--green); background: color-mix(in srgb, var(--green) 9%, transparent); border-radius: 7px 7px 0 0; }
+  .nav-btn:hover { color: var(--dim); }
 
   /* MAIN */
   main { max-width: 700px; margin: 0 auto; padding: 14px 12px 80px; }
@@ -745,13 +748,26 @@
       <div class="card-title" id="pc-form-title">Log Paycheck Received</div>
       <div class="row">
         <div class="field">
-          <label class="lbl">Week of (Monday)</label>
-          <input type="date" id="pc-weekstart"/>
+          <label class="lbl">Week</label>
+          <select id="pc-weekstart"></select>
         </div>
         <div class="field">
-          <label class="lbl">Amount Received</label>
-          <input type="number" id="pc-amount" min="0" step="0.01" placeholder="0.00"/>
+          <label class="lbl">Gross received</label>
+          <input type="number" id="pc-amount" min="0" step="0.01" placeholder="0.00" oninput="updatePcNet()"/>
         </div>
+      </div>
+      <div class="sec-lbl" style="margin-top:14px;margin-bottom:8px">Taxes withheld <span>(optional)</span></div>
+      <div class="row">
+        <div class="field"><label class="lbl">FITW</label><input type="number" id="pc-fitw" min="0" step="0.01" placeholder="0.00" oninput="updatePcNet()"/></div>
+        <div class="field"><label class="lbl">FL</label><input type="number" id="pc-fl" min="0" step="0.01" placeholder="0.00" oninput="updatePcNet()"/></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="field"><label class="lbl">MED · Medicare</label><input type="number" id="pc-med" min="0" step="0.01" placeholder="0.00" oninput="updatePcNet()"/></div>
+        <div class="field"><label class="lbl">SS · Social Sec.</label><input type="number" id="pc-ss" min="0" step="0.01" placeholder="0.00" oninput="updatePcNet()"/></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:10px 12px;background:var(--bg3);border-radius:8px">
+        <span class="lbl">Net take-home</span>
+        <span id="pc-net" style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green)">$0.00</span>
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn-primary" onclick="savePaycheck()">Save</button>
@@ -1501,6 +1517,10 @@ function renderHistory(){
         ${customPresets.map((p,i)=>`<option value="c${i}">★ ${(p.name||'preset').replace(/[<>]/g,'')}</option>`).join("")}
       </select>
       <button class="btn-danger" onclick="bulkDelete()">Delete</button>
+      <div style="display:flex;gap:6px;align-items:center;flex:1 1 100%;margin-top:4px">
+        <input type="date" id="bulk-date" style="flex:1;min-width:120px"/>
+        <button class="btn-ghost" onclick="bulkSetDate()">Set date on selected</button>
+      </div>
     </div>`:""}`;
 
   el.innerHTML=toolbar+days.map(day=>{
@@ -1576,13 +1596,29 @@ function presetConfig(key){
 async function bulkApplyPreset(key){
   if(!key||!selectedOrders.size) return;
   const cfg=presetConfig(key); if(!cfg) return;
-  const ids=[...selectedOrders];
-  if(!confirm(`Change ${ids.length} selected order(s) to this preset?`)) return;
+  // a line-preset doesn't apply to daily-tally entries — skip them
+  const ids=[...selectedOrders].filter(id=>{ const o=orders.find(x=>x.id===id); return !(o&&o.source==="tally"); });
+  const skipped=selectedOrders.size-ids.length;
+  if(!ids.length){ showToast("Selected items are tally entries — can't apply a preset to those"); return; }
+  if(!confirm(`Change ${ids.length} selected order(s) to this preset?${skipped?` (${skipped} tally entr${skipped>1?"ies":"y"} skipped)`:""}`)) return;
   showToast(`Updating ${ids.length} order(s)…`);
   try{
     for(const id of ids){ await fetch(`${API}/orders/${id}`,{method:"PUT",headers:getHeaders(),body:JSON.stringify(cfg)}); }
     selectMode=false; selectedOrders.clear();
     await loadData(); showToast("✓ Orders updated");
+  }catch(e){ showToast("⚠ Could not update — check connection"); }
+}
+async function bulkSetDate(){
+  if(!selectedOrders.size) return;
+  const d=document.getElementById("bulk-date").value;
+  if(!d){ showToast("Pick a date first"); return; }
+  const ids=[...selectedOrders];
+  if(!confirm(`Set ${ids.length} selected order(s) to ${fmtDate(d)}?`)) return;
+  showToast(`Updating ${ids.length} order(s)…`);
+  try{
+    for(const id of ids){ await fetch(`${API}/orders/${id}`,{method:"PUT",headers:getHeaders(),body:JSON.stringify({date:d})}); }
+    selectMode=false; selectedOrders.clear();
+    await loadData(); showToast("✓ Dates updated");
   }catch(e){ showToast("⚠ Could not update — check connection"); }
 }
 async function bulkDelete(){
@@ -1733,17 +1769,37 @@ function renderWeekly(){
 }
 
 // ── Render Paychecks ──────────────────────────────────────────────────────────
+function pcWeekOptions(sel){
+  let opts=""; const mon=getWeekStart(today());
+  for(let i=0;i<16;i++){
+    const d=new Date(mon+"T12:00:00"); d.setDate(d.getDate()-i*7);
+    const ws=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    opts+=`<option value="${ws}" ${ws===sel?"selected":""}>${weekLabel(ws)}${i===0?" (this week)":""}</option>`;
+  }
+  return opts;
+}
+function populatePcWeeks(sel){ document.getElementById("pc-weekstart").innerHTML=pcWeekOptions(sel||getWeekStart(today())); }
+function pcTax(p){ return (Number(p.fitw)||0)+(Number(p.fl)||0)+(Number(p.med)||0)+(Number(p.ss)||0); }
+function updatePcNet(){
+  const g=id=>Number(document.getElementById(id).value)||0;
+  document.getElementById("pc-net").textContent=fmt(g("pc-amount")-(g("pc-fitw")+g("pc-fl")+g("pc-med")+g("pc-ss")));
+}
+
 function renderPaychecks(){
   const wd=getWeeklyData();
   const totalEarned=orders.reduce((s,o)=>s+o.commission,0);
   const totalPaid=paychecks.reduce((s,p)=>s+Number(p.amount),0);
+  const totalTax=paychecks.reduce((s,p)=>s+pcTax(p),0);
   const delta=totalEarned-totalPaid;
 
-  document.getElementById("pc-weekstart").value=getWeekStart(today());
+  if(!editingPc) populatePcWeeks();
+  updatePcNet();
 
   document.getElementById("pc-totals").innerHTML=`
     <div class="total-item"><div class="lbl">Total Expected</div><div class="total-val" style="color:var(--green)">${fmt(totalEarned)}</div></div>
     <div class="total-item"><div class="lbl">Total Received</div><div class="total-val" style="color:var(--blue)">${fmt(totalPaid)}</div></div>
+    <div class="total-item"><div class="lbl">Total Taxes</div><div class="total-val" style="color:var(--yellow)">${fmt(totalTax)}</div></div>
+    <div class="total-item"><div class="lbl">Net Take-home</div><div class="total-val" style="color:var(--green)">${fmt(totalPaid-totalTax)}</div></div>
     <div class="total-item"><div class="lbl">Outstanding</div><div class="total-val" style="color:${delta<-0.01?"var(--red)":delta>0.01?"var(--green)":"var(--muted)"}">${(delta>=0?"+":"")+fmt(delta)}</div></div>`;
 
   const list=document.getElementById("pc-list");
@@ -1753,45 +1809,70 @@ function renderPaychecks(){
     const wk=wd[p.weekStart];
     const exp=wk?wk.earned:0;
     const rec=Number(p.amount);
+    const tax=pcTax(p);
     const d=exp-rec;
     return `<div class="pc-row" style="margin-bottom:10px">
       <div style="flex:1">
         <div class="week-range">${weekLabel(p.weekStart)}</div>
-        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">
           <div><div class="lbl">Expected</div><div style="font-size:13px;font-weight:700;color:var(--green)">${fmt(exp)}</div></div>
           <div><div class="lbl">Received</div><div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(rec)}</div></div>
           <div><div class="lbl">Diff</div><div style="font-size:13px;font-weight:700;color:${d<-0.01?"var(--red)":d>0.01?"var(--green)":"var(--muted)"}">${(d>=0?"+":"")+fmt(d)}</div></div>
+          ${tax>0?`<div><div class="lbl">Taxes</div><div style="font-size:13px;font-weight:700;color:var(--yellow)">${fmt(tax)}</div></div>
+          <div><div class="lbl">Net</div><div style="font-size:13px;font-weight:700;color:var(--dim)">${fmt(rec-tax)}</div></div>`:""}
         </div>
       </div>
-      <button class="btn-ghost" style="font-size:10px;align-self:flex-start" onclick="editPc('${p.weekStart}',${p.amount})">Edit</button>
+      <div style="display:flex;flex-direction:column;gap:5px;align-self:flex-start">
+        <button class="btn-ghost" style="font-size:10px" onclick="editPc('${p.weekStart}')">Edit</button>
+        <button class="btn-del" style="font-size:10px" onclick="deletePc('${p.weekStart}')">Delete</button>
+      </div>
     </div>`;
   }).join("");
 }
 
 async function savePaycheck(){
   const ws=document.getElementById("pc-weekstart").value;
+  const g=id=>Number(document.getElementById(id).value)||0;
   const amt=document.getElementById("pc-amount").value;
-  if(!ws||!amt) return;
+  if(!ws||amt===""){ showToast("Pick a week and enter the gross amount"); return; }
   try{
-    await apiPost("/paychecks",{weekStart:ws,amount:Number(amt)});
+    await apiPost("/paychecks",{weekStart:ws,amount:Number(amt)||0,fitw:g("pc-fitw"),fl:g("pc-fl"),med:g("pc-med"),ss:g("pc-ss")});
     await loadData();
     cancelPcEdit();
     showToast("✓ Paycheck saved");
     renderPaychecks();
   } catch(e){ showToast("⚠ Could not save"); }
 }
-function editPc(ws,amt){
+function editPc(ws){
+  const p=paychecks.find(x=>x.weekStart===ws)||{};
   editingPc=ws;
-  document.getElementById("pc-weekstart").value=ws;
-  document.getElementById("pc-amount").value=amt;
-  document.getElementById("pc-form-title").textContent="Edit Paycheck";
+  populatePcWeeks(ws);
+  document.getElementById("pc-amount").value=p.amount!=null?p.amount:"";
+  document.getElementById("pc-fitw").value=p.fitw||"";
+  document.getElementById("pc-fl").value=p.fl||"";
+  document.getElementById("pc-med").value=p.med||"";
+  document.getElementById("pc-ss").value=p.ss||"";
+  updatePcNet();
+  document.getElementById("pc-form-title").textContent="Edit Paycheck — "+weekLabel(ws);
   document.getElementById("pc-cancel").style.display="inline-block";
+  window.scrollTo(0,0);
 }
 function cancelPcEdit(){
   editingPc=null;
-  document.getElementById("pc-amount").value="";
+  ["pc-amount","pc-fitw","pc-fl","pc-med","pc-ss"].forEach(id=>document.getElementById(id).value="");
+  populatePcWeeks();
+  updatePcNet();
   document.getElementById("pc-form-title").textContent="Log Paycheck Received";
   document.getElementById("pc-cancel").style.display="none";
+}
+async function deletePc(ws){
+  if(!confirm(`Delete the paycheck for ${weekLabel(ws)}? This cannot be undone.`)) return;
+  try{
+    await apiDelete(`/paychecks/${ws}`);
+    await loadData();
+    showToast("✓ Paycheck deleted");
+    renderPaychecks();
+  } catch(e){ showToast("⚠ Could not delete"); }
 }
 
 // ── Render Goals ──────────────────────────────────────────────────────────────
@@ -2180,7 +2261,7 @@ function updateAll(){
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById("ob-date").value=today();
-document.getElementById("pc-weekstart").value=getWeekStart(today());
+populatePcWeeks();
 renderCustomPresets();
 
 // Check for existing session
