@@ -72,7 +72,11 @@ const OrderSchema = new mongoose.Schema({
 const PaycheckSchema = new mongoose.Schema({
   userId:    { type: String, required: true },
   weekStart: String,
-  amount:    Number,
+  amount:    Number,                 // gross paycheck received
+  fitw:      { type: Number, default: 0 },  // federal income tax withheld
+  fl:        { type: Number, default: 0 },  // FL / state line
+  med:       { type: Number, default: 0 },  // Medicare
+  ss:        { type: Number, default: 0 },  // Social Security
 });
 
 const User     = mongoose.model("User",     UserSchema);
@@ -270,9 +274,12 @@ app.put("/orders/:id", authMiddleware, async (req, res) => {
     const uid   = String(req.user._id);
     const order = await Order.findOne({ _id:req.params.id, userId:uid });
     if (!order) return res.status(404).json({ error:"Not found" });
-    Object.assign(order, req.body);
-    order.commission = calcCommission(order);
-    order.breakdown  = buildBreakdown(order);
+    const { commission:_c, breakdown:_b, source:_s, tally:_t, ...fields } = req.body;  // don't let these be overwritten
+    Object.assign(order, fields);
+    if (order.source !== "tally") {        // tally keeps its precomputed total (e.g. on a date change)
+      order.commission = calcCommission(order);
+      order.breakdown  = buildBreakdown(order);
+    }
     await order.save();
     res.json({ success:true, order });
   } catch(e) { res.status(500).json({ error:e.message }); }
@@ -287,16 +294,25 @@ app.delete("/orders/:id", authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
-// Save paycheck
+// Save paycheck (upsert per week, with tax breakdown)
 app.post("/paychecks", authMiddleware, async (req, res) => {
   try {
     const uid = String(req.user._id);
-    const { weekStart, amount } = req.body;
+    const { weekStart, amount, fitw, fl, med, ss } = req.body;
     await Paycheck.findOneAndUpdate(
       { userId:uid, weekStart },
-      { amount:Number(amount) },
+      { amount:Number(amount)||0, fitw:Number(fitw)||0, fl:Number(fl)||0, med:Number(med)||0, ss:Number(ss)||0 },
       { upsert:true }
     );
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// Delete a paycheck for a given week
+app.delete("/paychecks/:weekStart", authMiddleware, async (req, res) => {
+  try {
+    const uid = String(req.user._id);
+    await Paycheck.deleteOne({ userId:uid, weekStart:req.params.weekStart });
     res.json({ success:true });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
