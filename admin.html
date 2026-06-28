@@ -170,7 +170,7 @@
     <!-- ORDERS TAB -->
     <div id="view-orders" style="display:none">
       <div class="search-row">
-        <input class="search-input" id="order-search" placeholder="Search by user name, email, or note..." oninput="renderOrders()"/>
+        <input class="search-input" id="order-search" placeholder="Search by account #, user, email, or note..." oninput="renderOrders()"/>
         <select class="filter-select" id="order-type-filter" onchange="renderOrders()">
           <option value="">All types</option>
           <option value="new">New Activation</option>
@@ -416,7 +416,8 @@ function renderOrders(){
     const name = user ? (user.name||"").toLowerCase():"";
     const email= user ? (user.email||"").toLowerCase():"";
     const note = (o.note||"").toLowerCase();
-    const matchQ = !q || name.includes(q)||email.includes(q)||note.includes(q);
+    const acct = (o.accountNumber||"").toLowerCase();
+    const matchQ = !q || name.includes(q)||email.includes(q)||note.includes(q)||acct.includes(q);
     const matchT = !typeF || o.type===typeF;
     return matchQ && matchT;
   }).sort((a,b)=> new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
@@ -439,6 +440,7 @@ function renderOrders(){
       <td>${o.source==="extension"?`<span style="color:var(--blue);font-size:10px">auto</span>`:`<span style="color:#333;font-size:10px">manual</span>`}</td>
       <td style="white-space:nowrap">
         <button class="act-btn" onclick="openEdit('${o.id}')">Edit</button>
+        ${o.rawFields?`<button class="act-btn" onclick="showRaw('${o.id}')">raw</button>`:""}
         <button class="act-btn danger" onclick="deleteOrder('${o.id}')">Delete</button>
       </td>
     </tr>`;
@@ -449,6 +451,26 @@ function renderOrders(){
       <thead><tr><th>Date</th><th>User</th><th>Type</th><th>Lines</th><th>Commission</th><th>Account #</th><th>Note</th><th>Source</th><th>Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+}
+
+// Show the full captured field map from an extension order (so we can confirm the account-# field)
+function showRaw(id){
+  const o=allOrders.find(x=>x.id===id);
+  if(!o||!o.rawFields){ alert("No raw capture on this order."); return; }
+  const f=o.rawFields;
+  const lines=Object.keys(f).map(k=>`${k}: ${f[k]}`).join("\n");
+  try{ navigator.clipboard.writeText(lines); }catch(_){}
+  let ov=document.getElementById("raw-overlay");
+  if(!ov){ ov=document.createElement("div"); ov.id="raw-overlay";
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;z-index:80;overflow-y:auto";
+    document.body.appendChild(ov); }
+  ov.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:18px;max-width:480px;width:100%">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;color:var(--green);margin-bottom:8px">Captured fields</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Screenshot this and send it — tell me which line is the account number. (Already copied to your clipboard too.)</div>
+    <pre style="white-space:pre-wrap;word-break:break-all;font-size:12px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:55vh;overflow:auto">${lines.replace(/[<>]/g,"")}</pre>
+    <button class="act-btn" style="margin-top:12px" onclick="document.getElementById('raw-overlay').remove()">Close</button>
+  </div>`;
+  ov.style.display="flex";
 }
 
 // ── Order actions ───────────────────────────────────────────────────────────────
