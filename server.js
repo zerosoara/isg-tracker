@@ -57,6 +57,7 @@ const OrderSchema = new mongoose.Schema({
   date:         String,
   note:         String,
   orderId:      String,
+  accountNumber:String,        // customer account # (for pay disputes / lookups)
   type:         { type: String, default: "new" },
   regularLines: { type: Number, default: 0 },
   homeLines:    { type: Number, default: 0 },
@@ -66,6 +67,7 @@ const OrderSchema = new mongoose.Schema({
   breakdown:    Array,
   source:       String,
   tally:        { type: mongoose.Schema.Types.Mixed },  // aggregate day-tally data (source==="tally")
+  rawFields:    { type: mongoose.Schema.Types.Mixed },  // full field capture from the extension (for verification)
   createdAt:    { type: Date, default: Date.now },
 });
 
@@ -234,6 +236,7 @@ app.post("/orders", authMiddleware, async (req, res) => {
         date:   raw.date || new Date().toISOString().split("T")[0],
         note:   raw.notes || raw.orderId || "",
         orderId:raw.orderId || "",
+        accountNumber: raw.accountNumber || raw.acctNumber || raw.orderId || "",
         type:   isReactivation ? "reactivation" : "new",
         regularLines, homeLines,
         perAccount: {
@@ -249,6 +252,7 @@ app.post("/orders", authMiddleware, async (req, res) => {
           watchWithLine:  parseInt(raw.watchWithLine)   || 0,
         },
         source: "extension",
+        rawFields: raw.rawFields || undefined,   // full portal capture (incl. whatever holds the account #)
       };
     } else {
       order = { ...raw, userId: uid };
