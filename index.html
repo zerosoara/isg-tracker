@@ -1172,11 +1172,13 @@ function buildBreakdown(o){
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
-async function loadData(){
+let syncFails=0;
+async function loadData(bg){
   if (!authToken) return;
   try {
     const r = await fetch(`${API}/data`, { headers: getHeaders() });
     if (r.status === 401) { doLogout(); return; }
+    if (!r.ok) throw new Error("status "+r.status);
     const d = await r.json();
     // MongoDB returns each record with _id; the UI references o.id everywhere
     // (edit/delete buttons). Mirror _id -> id so those actions target the right order.
@@ -1200,11 +1202,14 @@ async function loadData(){
       localStorage.setItem("customPresets", JSON.stringify(customPresets));
       renderCustomPresets();
     }
+    syncFails=0;
     setSyncStatus(true);
     updateAll();
   } catch(e){
-    setSyncStatus(false);
-    showToast("⚠ Backend offline — check Render");
+    // brief blips happen (phone signal, a deploy restart, slow DB) — don't cry wolf.
+    syncFails++;
+    if (syncFails>=2) setSyncStatus(false);               // only flip the dot after 2 misses
+    if (!bg && syncFails>=2) showToast("⚠ Trouble reaching the server — retrying…");
   }
   document.getElementById("loading").style.opacity="0";
   setTimeout(()=>document.getElementById("loading").style.display="none",400);
@@ -1220,6 +1225,11 @@ function setSyncStatus(ok){
 async function apiPost(path,body){
   const r=await fetch(`${API}${path}`,{method:"POST",headers:getHeaders(),body:JSON.stringify(body)});
   return r.json();
+}
+// run a network call, and if it fails (blip / deploy restart), wait briefly and try once more
+async function withRetry(fn){
+  try { return await fn(); }
+  catch(e){ await new Promise(r=>setTimeout(r,1500)); return await fn(); }
 }
 async function apiDelete(path){
   const r=await fetch(`${API}${path}`,{method:"DELETE",headers:getHeaders()});
@@ -1322,13 +1332,13 @@ async function submitOrder(){
 
   try {
     if(editingId){
-      await fetch(`${API}/orders/${editingId}`,{
+      await withRetry(()=>fetch(`${API}/orders/${editingId}`,{
         method:"PUT",headers:getHeaders(),
         body:JSON.stringify(order)
-      });
+      }));
       showToast("✓ Order updated");
     } else {
-      await apiPost("/orders",order);
+      await withRetry(()=>apiPost("/orders",order));
       showToast("✓ Order logged");
     }
     await loadData();
@@ -1684,7 +1694,7 @@ async function submitTally(){
   };
   const btn=document.getElementById("t-save"); btn.disabled=true; btn.textContent="Saving…";
   try{
-    await apiPost("/orders",order);
+    await withRetry(()=>apiPost("/orders",order));
     closeTally(); await loadData(); showToast("✓ Day logged");
   }catch(e){ showToast("⚠ Could not save — check connection"); }
   btn.disabled=false; btn.textContent="Log Day";
@@ -1836,7 +1846,7 @@ async function savePaycheck(){
   const amt=document.getElementById("pc-amount").value;
   if(!ws||amt===""){ showToast("Pick a week and enter the gross amount"); return; }
   try{
-    await apiPost("/paychecks",{weekStart:ws,amount:Number(amt)||0,fitw:g("pc-fitw"),fl:g("pc-fl"),med:g("pc-med"),ss:g("pc-ss")});
+    await withRetry(()=>apiPost("/paychecks",{weekStart:ws,amount:Number(amt)||0,fitw:g("pc-fitw"),fl:g("pc-fl"),med:g("pc-med"),ss:g("pc-ss")}));
     await loadData();
     cancelPcEdit();
     showToast("✓ Paycheck saved");
@@ -2274,7 +2284,7 @@ if (authToken && authUser) {
   setTimeout(()=>document.getElementById("loading").style.display="none",400);
 }
 
-setInterval(()=>{ if(authToken) loadData(); }, 30000);
+setInterval(()=>{ if(authToken) loadData(true); }, 30000);   // background sync: fails quietly, no alarms
 </script>
 </body>
 </html>
