@@ -607,6 +607,10 @@
           <label class="lbl">Date</label>
           <input type="date" id="ob-date"/>
         </div>
+        <div class="field">
+          <label class="lbl">Account # <span>(optional)</span></label>
+          <input type="text" id="ob-account" placeholder="customer account #" autocorrect="off" autocapitalize="off"/>
+        </div>
       </div>
 
       <div class="divider">
@@ -1323,6 +1327,7 @@ async function submitOrder(){
 
   const order = {
     date:dateVal, note, type:obType,
+    accountNumber:document.getElementById("ob-account").value.trim(),
     regularLines:lines, homeLines:home,
     perAccount:{...obAcct},
     perDevice:{device,protection:prot,accessories:acc,irisAlly:iris,tabletWithLine:tablet,watchWithLine:watch},
@@ -1351,6 +1356,7 @@ function resetBuilder(){
   obAcct={aarp:false,autopay:false};
   obType="new";
   document.getElementById("ob-date").value=today();
+  document.getElementById("ob-account").value="";
   document.getElementById("ob-lines").value="0";
   document.getElementById("ob-home").value="0";
   document.getElementById("ob-device").value="0";
@@ -1376,6 +1382,7 @@ function startEdit(id){
   // start from OFF so the toggleAcct() calls below correctly turn them ON (was double-toggling autopay off)
   obType=o.type; obAcct={aarp:false,autopay:false};
   document.getElementById("ob-date").value=o.date;
+  document.getElementById("ob-account").value=o.accountNumber||"";
   document.getElementById("ob-lines").value=o.regularLines;
   document.getElementById("ob-home").value=o.homeLines;
   document.getElementById("ob-device").value=o.perDevice.device||0;
@@ -1572,6 +1579,7 @@ function renderHistory(){
               ${(o.perDevice&&o.perDevice.irisAlly||0)>0?`<span class="tag" style="background:#fb923c22;border:1px solid #fb923c50;color:var(--orange)">${o.perDevice.irisAlly} iris</span>`:""}
               ${(o.perDevice&&o.perDevice.accessories||0)>0?`<span class="tag" style="background:#f472b622;border:1px solid #f472b650;color:var(--pink)">${o.perDevice.accessories} accessories</span>`:""}
               ${o.source==="extension"?`<span class="tag" style="background:#00b8ff10;border:1px solid #00b8ff30;color:var(--blue)">auto</span>`:""}
+              ${o.accountNumber?`<span class="tag" style="background:#00b8ff15;border:1px solid #00b8ff40;color:var(--blue)">acct ${o.accountNumber}</span>`:""}
               ${o.note?`<span style="font-size:10px;color:var(--muted);font-style:italic">${o.note}</span>`:""}
             </div>
             <div class="order-bd">
