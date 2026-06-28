@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Ninja Tracker Sync",
+  "version": "1.4",
+  "description": "Silently syncs ISG portal orders to Ninja Tracker",
+  "permissions": [
+    "storage",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://cci.infsalesgroup.com/*",
+    "https://isg-tracker.onrender.com/*",
+    "https://zerosoara.github.io/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://cci.infsalesgroup.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
