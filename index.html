@@ -738,6 +738,19 @@
 
   <!-- HISTORY -->
   <div id="view-history" class="col" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <input id="hist-search" placeholder="🔍 Search account #, note, or type…" autocorrect="off" autocapitalize="off" oninput="renderHistory()" style="margin-bottom:8px"/>
+      <div class="row" style="gap:8px">
+        <div class="field"><label class="lbl">Week</label><select id="hist-week" onchange="renderHistory()"></select></div>
+        <div class="field"><label class="lbl">Source</label>
+          <select id="hist-source" onchange="renderHistory()">
+            <option value="all">All</option>
+            <option value="auto">Auto (extension)</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div id="history-content"></div>
   </div>
 
@@ -1510,20 +1523,52 @@ function showView(v){
 }
 
 // ── Render History ────────────────────────────────────────────────────────────
+function populateHistWeeks(){
+  const sel=document.getElementById("hist-week"); if(!sel) return;
+  const prev=sel.value;
+  const weeks=[...new Set(orders.map(o=>getWeekStart(o.date)))].sort((a,b)=>b.localeCompare(a));
+  sel.innerHTML='<option value="all">All weeks</option>'+weeks.map(w=>`<option value="${w}">${weekLabel(w)}</option>`).join("");
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
+}
 function renderHistory(){
   const el=document.getElementById("history-content");
+  populateHistWeeks();
   if(!orders.length){ el.innerHTML='<div class="empty">No orders yet.</div>'; return; }
 
+  // ── filters ──
+  const q  =(document.getElementById("hist-search")  && document.getElementById("hist-search").value||"").toLowerCase().trim();
+  const wk =(document.getElementById("hist-week")    && document.getElementById("hist-week").value)||"all";
+  const src=(document.getElementById("hist-source")  && document.getElementById("hist-source").value)||"all";
+  const match=o=>{
+    if(wk!=="all" && getWeekStart(o.date)!==wk) return false;
+    if(src==="auto"   && o.source!=="extension") return false;
+    if(src==="manual" && o.source==="extension") return false;
+    if(q){ const hay=((o.accountNumber||"")+" "+(o.note||"")+" "+(o.type||"")+" "+(o.orderId||"")).toLowerCase(); if(!hay.includes(q)) return false; }
+    return true;
+  };
+  const fOrders=orders.filter(match);
+
   const byDay={};
-  orders.forEach(o=>{ if(!byDay[o.date]) byDay[o.date]=[]; byDay[o.date].push(o); });
+  fOrders.forEach(o=>{ if(!byDay[o.date]) byDay[o.date]=[]; byDay[o.date].push(o); });
   const days=Object.keys(byDay).sort((a,b)=>b.localeCompare(a));
 
-  const toolbar=`
+  // ── stats over the filtered set ──
+  const sTotal=fOrders.reduce((s,o)=>s+o.commission,0);
+  const sAvg=fOrders.length?sTotal/fOrders.length:0;
+  let bestDay=null,bestAmt=0; days.forEach(d=>{ const a=byDay[d].reduce((s,o)=>s+o.commission,0); if(a>bestAmt){bestAmt=a;bestDay=d;} });
+
+  const stats=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div class="sec-lbl" style="margin:0">${orders.length} order${orders.length!==1?"s":""}</div>
+      <div class="sec-lbl" style="margin:0">${fOrders.length}${fOrders.length!==orders.length?` of ${orders.length}`:""} order${fOrders.length!==1?"s":""}</div>
       <button class="btn-ghost" onclick="toggleSelectMode()">${selectMode?"✕ Cancel":"☑ Select"}</button>
     </div>
-    ${selectMode?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px">
+    ${fOrders.length?`<div class="card" style="margin-bottom:12px;padding:12px"><div style="display:flex;gap:18px;flex-wrap:wrap">
+      <div><div class="lbl">Total</div><div style="font-size:15px;font-weight:700;color:var(--green)">${fmt(sTotal)}</div></div>
+      <div><div class="lbl">Avg / order</div><div style="font-size:15px;font-weight:700;color:var(--blue)">${fmt(sAvg)}</div></div>
+      ${bestDay?`<div><div class="lbl">Best day</div><div style="font-size:15px;font-weight:700;color:var(--green)">${fmtDate(bestDay)} · ${fmt(bestAmt)}</div></div>`:""}
+    </div></div>`:""}`;
+
+  const bulkbar=`${selectMode?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px">
       <span id="bulk-count" style="font-size:12px;color:var(--dim)">${selectedOrders.size} selected</span>
       <select id="bulk-preset" onchange="bulkApplyPreset(this.value);this.value=''" style="flex:1;min-width:130px">
         <option value="">Change selected to…</option>
@@ -1540,14 +1585,22 @@ function renderHistory(){
       </div>
     </div>`:""}`;
 
-  el.innerHTML=toolbar+days.map(day=>{
+  if(!fOrders.length){ el.innerHTML=stats+bulkbar+'<div class="empty">No orders match your filters.</div>'; return; }
+
+  el.innerHTML=stats+bulkbar+days.map(day=>{
     const dos=byDay[day];
     const dt=dos.reduce((s,o)=>s+o.commission,0);
+    const dCount=dos.length;
+    const dsum=k=>dos.reduce((s,o)=>s+(k==="reg"?(o.regularLines||0):k==="home"?(o.homeLines||0):((o.perDevice&&o.perDevice[k])||0)),0);
+    const dLines=dsum("reg")+dsum("home")+dsum("tabletWithLine")+dsum("watchWithLine");
+    const chip=(lbl,n,color)=>n>0?`<span class="tag" style="background:${color}18;border:1px solid ${color}45;color:${color}">${lbl} ${n}</span>`:"";
+    const bd=[chip("Cell",dsum("reg"),"#00b8ff"),chip("Home",dsum("home"),"#fb923c"),chip("Tablet",dsum("tabletWithLine"),"#00b8ff"),chip("Watch",dsum("watchWithLine"),"#a78bfa"),chip("Iris",dsum("irisAlly"),"#fb923c"),chip("Devices",dsum("device"),"#f472b6"),chip("Protection",dsum("protection"),"#f472b6"),chip("Accessories",dsum("accessories"),"#f472b6")].join("");
     return `<div class="day-block" style="margin-bottom:12px">
-      <div class="day-head">
-        <span class="day-lbl">${fmtDate(day)}</span>
+      <div class="day-head" style="cursor:pointer" onclick="var x=document.getElementById('daybd-${day}');x.style.display=x.style.display==='none'?'flex':'none'">
+        <span class="day-lbl">▾ ${fmtDate(day)} <span style="color:var(--muted);font-size:11px;font-weight:400">· ${dCount} order${dCount!==1?"s":""} · ${dLines} line${dLines!==1?"s":""}</span></span>
         <span class="day-total">${fmt(dt)}</span>
       </div>
+      <div id="daybd-${day}" style="display:none;flex-wrap:wrap;gap:6px;margin:2px 0 8px;padding:8px;background:var(--bg3);border-radius:8px">${bd||'<span class="lbl">no line items</span>'}</div>
       ${dos.map(o=>{
         const cb=selectMode?`<input type="checkbox" ${selectedOrders.has(o.id)?"checked":""} onchange="toggleRowSelect('${o.id}',this)" style="width:auto;margin-right:10px;align-self:center;transform:scale(1.3)">`:"";
         if(o.source==="tally"){
