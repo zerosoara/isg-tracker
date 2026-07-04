@@ -13,6 +13,11 @@ function getToken() {
   });
 }
 
+// Record what happened on the last capture attempt so the popup can show it (no more silent failures).
+function recordAttempt(ok, reason) {
+  chrome.storage.local.set({ nt_last_attempt: { time: Date.now(), ok, reason: reason || "" } });
+}
+
 const norm = s => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // read the value of one mat-form-field: input/textarea value, native select, or the mat-select's shown text
@@ -68,47 +73,70 @@ function captureToggles() {
 }
 
 async function captureForm() {
-  const token = await getToken();
-  if (!token) return; // not logged into the tracker yet
+  try {
+    const token = await getToken();
+    if (!token) {
+      recordAttempt(false, "Not logged in — open Ninja Tracker, log in, then reload that page.");
+      return;
+    }
 
-  const m = captureAll();
-  const tg = captureToggles();
-  const byName = (...keys) => { for (const k of keys) { if (m[k] != null && m[k] !== "") return m[k]; } return ""; };
-  const byLabel = (...labels) => { for (const l of labels) { const v = m["lbl:" + norm(l)]; if (v != null && v !== "") return v; } return ""; };
-  const num = v => { const n = parseInt(String(v).replace(/[^0-9]/g, "")); return isNaN(n) ? "0" : String(n); };
+    const m = captureAll();
+    const tg = captureToggles();
+    const byName = (...keys) => { for (const k of keys) { if (m[k] != null && m[k] !== "") return m[k]; } return ""; };
+    const byLabel = (...labels) => { for (const l of labels) { const v = m["lbl:" + norm(l)]; if (v != null && v !== "") return v; } return ""; };
+    const num = v => { const n = parseInt(String(v).replace(/[^0-9]/g, "")); return isNaN(n) ? "0" : String(n); };
 
-  const orderId = byName("orderId") || byLabel("Order ID");
+    const orderId = byName("orderId") || byLabel("Order ID");
 
-  const payload = {
-    date:            new Date().toISOString().split("T")[0],
-    agentId:         byName("agentId") || byLabel("Agent ID"),
-    ani:             byName("ani", "orderAni") || byLabel("Call ANI", "Order ANI"),
-    orderId:         orderId,
-    accountNumber:   orderId,   // this form's unique identifier (no separate "account #" field exists)
-    wirelessLines:   num(byLabel("Wireless Lines")),
-    protectionPlans: num(byLabel("Protection Plans")),
-    newDevices:      num(byLabel("New Devices")),
-    irisAlly:        num(byLabel("IRIS Ally/PERS", "IRIS Ally", "IRIS Ally / PERS", "PERS")),
-    tabletWithLine:  num(byLabel("Tablet w/ Line", "Tablet with Line", "Tablet")),
-    watchWithLine:   num(byLabel("Watch w/ Line", "Watch with Line", "Watch")),
-    homePhoneBase:   num(byLabel("Home Phone Base", "Home Phone")),
-    accessories:     num(byName("accessories") || byLabel("Accessories")),
-    notes:           byName("notes") || byLabel("Notes"),
-    autoPay:         tg.autoPay,
-    aarpDiscount:    tg.aarpDiscount,
-    reactivation:    tg.reactivation,
-    rawFields:       Object.assign({}, m, { _toggles: tg }),  // full capture for verification
-  };
+    const payload = {
+      date:            new Date().toISOString().split("T")[0],
+      agentId:         byName("agentId") || byLabel("Agent ID"),
+      ani:             byName("ani", "orderAni") || byLabel("Call ANI", "Order ANI"),
+      orderId:         orderId,
+      accountNumber:   orderId,   // this form's unique identifier (no separate "account #" field exists)
+      wirelessLines:   num(byLabel("Wireless Lines")),
+      protectionPlans: num(byLabel("Protection Plans")),
+      newDevices:      num(byLabel("New Devices")),
+      irisAlly:        num(byLabel("IRIS Ally/PERS", "IRIS Ally", "IRIS Ally / PERS", "PERS")),
+      tabletWithLine:  num(byLabel("Tablet w/ Line", "Tablet with Line", "Tablet")),
+      watchWithLine:   num(byLabel("Watch w/ Line", "Watch with Line", "Watch")),
+      homePhoneBase:   num(byLabel("Home Phone Base", "Home Phone")),
+      accessories:     num(byName("accessories") || byLabel("Accessories")),
+      notes:           byName("notes") || byLabel("Notes"),
+      autoPay:         tg.autoPay,
+      aarpDiscount:    tg.aarpDiscount,
+      reactivation:    tg.reactivation,
+      rawFields:       Object.assign({}, m, { _toggles: tg }),  // full capture for verification
+    };
 
-  // don't send an empty/non-order capture
-  const anyLines = (parseInt(payload.wirelessLines) || 0) + (parseInt(payload.homePhoneBase) || 0);
-  if (!payload.orderId && anyLines === 0 && Object.keys(m).length === 0) return;
+    // don't send an empty/non-order capture
+    const anyLines = (parseInt(payload.wirelessLines) || 0) + (parseInt(payload.homePhoneBase) || 0);
+    if (!payload.orderId && anyLines === 0 && Object.keys(m).length === 0) {
+      recordAttempt(false, "Nothing to capture — form looked empty.");
+      return;
+    }
 
-  fetch(`${BACKEND_URL}/orders`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-    body:    JSON.stringify(payload),
-  }).catch(() => {});
+    let res;
+    try {
+      res = await fetch(`${BACKEND_URL}/orders`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body:    JSON.stringify(payload),
+      });
+    } catch (netErr) {
+      recordAttempt(false, "Network error — could not reach the server.");
+      return;
+    }
+
+    if (res.ok) {
+      const preview = orderId ? `order #${orderId}` : `${payload.wirelessLines} line(s)`;
+      recordAttempt(true, `Sent — ${preview}`);
+    } else {
+      recordAttempt(false, `Server rejected it (status ${res.status}). Token may be expired — log in again and reload.`);
+    }
+  } catch (e) {
+    recordAttempt(false, "Unexpected error: " + (e && e.message || e));
+  }
 }
 
 // fire on the "Submit Sale" button (confirmed: <button type="submit"> ... "Submit Sale")
