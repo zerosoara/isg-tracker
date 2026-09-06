@@ -146,6 +146,7 @@
     transition: all .15s; flex: 1;
   }
   .type-btn.new-on    { background: #00e5a015; color: var(--green); border-color: #00e5a040; }
+  .type-btn.existing-on { background: #00b8ff20; color: var(--blue); border-color: #00b8ff50; }
   .type-btn.react-on  { background: #a78bfa20; color: var(--purple); border-color: #a78bfa50; }
   .info-box {
     margin-top: 8px; font-size: 11px; color: var(--purple);
@@ -429,7 +430,10 @@
       <div class="field"><label class="lbl">New lines (total)</label><input type="number" id="t-newlines" min="0" placeholder="0" oninput="calcTally()"/></div>
     </div>
     <div class="row" style="margin-bottom:8px">
+      <div class="field"><label class="lbl">Existing cust. lines</label><input type="number" id="t-existing" min="0" placeholder="0" oninput="calcTally()"/></div>
       <div class="field"><label class="lbl">Reactivation lines</label><input type="number" id="t-react" min="0" placeholder="0" oninput="calcTally()"/></div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
       <div class="field"><label class="lbl">Home lines</label><input type="number" id="t-home" min="0" placeholder="0" oninput="calcTally()"/></div>
     </div>
     <div class="row" style="margin-bottom:8px">
@@ -617,9 +621,11 @@
         <div class="sec-lbl">Order Type</div>
         <div class="type-row">
           <button class="type-btn new-on" id="btn-new" onclick="setType('new')">New Activation</button>
+          <button class="type-btn" id="btn-existing" onclick="setType('existing')">Existing Customer</button>
           <button class="type-btn" id="btn-react" onclick="setType('reactivation')">Reactivation</button>
         </div>
         <div class="info-box" id="react-info" style="display:none">Every line = $10.00 flat on reactivations</div>
+        <div class="info-box" id="existing-info" style="display:none">Every line = $15.00 flat — existing customer adding a line</div>
       </div>
 
       <div class="divider">
@@ -787,6 +793,9 @@
         <span class="lbl">Net take-home</span>
         <span id="pc-net" style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green)">$0.00</span>
       </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:12px;color:var(--dim)">
+        <input type="checkbox" id="pc-adh" style="width:auto"/> Hit 85%+ ADH this pay period (+$2 per New Account line)
+      </label>
       <div class="row" style="margin-top:12px">
         <button class="btn-primary" onclick="savePaycheck()">Save</button>
         <button class="btn-ghost" id="pc-cancel" style="display:none" onclick="cancelPcEdit()">Cancel</button>
@@ -1091,7 +1100,7 @@ function renderCustomPresets(){
 }
 
 // ── Rates ────────────────────────────────────────────────────────────────────
-const R = { newLine1:25, newLineN:15, reactivation:10, homeLine:10, irisAlly:10, tablet:10, watch:5, protection:2 };
+const R = { newLine1:25, newLineN:15, existingLine:15, reactivation:10, homeLine:15, irisAlly:15, tablet:10, watch:5, protection:2, adhBonus:2 };
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 function applyPreset(type) {
@@ -1136,6 +1145,11 @@ function weekLabel(ws){
 }
 function fmtDate(ds){ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }
 function monthKey(ds){ return ds.slice(0,7); }
+function typeInfo(type){
+  if(type==="reactivation") return { label:"Reactivation",       color:"var(--purple)", hex:"a78bfa" };
+  if(type==="existing")     return { label:"Existing Customer",  color:"var(--blue)",   hex:"00b8ff" };
+  return                           { label:"New Activation",     color:"var(--green)",  hex:"00e5a0" };
+}
 function monthLabel(mk){
   const[y,m]=mk.split("-");
   return new Date(+y,+m-1,1).toLocaleDateString("en-US",{month:"short",year:"2-digit"});
@@ -1151,6 +1165,10 @@ function calcCommission(o){
   const{type,regularLines,homeLines,perAccount,perDevice}=o;
   let t=0;
   if(type==="reactivation"){ t+=(regularLines+homeLines)*R.reactivation; }
+  else if(type==="existing"){
+    t+=(regularLines||0)*R.existingLine;
+    t+=(homeLines||0)*R.homeLine;
+  }
   else{
     if(regularLines>=1) t+=R.newLine1;
     if(regularLines>=2) t+=(regularLines-1)*R.newLineN;
@@ -1173,6 +1191,9 @@ function buildBreakdown(o){
   if(type==="reactivation"){
     const l=regularLines+homeLines;
     if(l>0) items.push({label:`Reactivation (${l}L)`,amt:l*R.reactivation,color:"var(--purple)"});
+  } else if(type==="existing"){
+    if(regularLines>0) items.push({label:`Existing×${regularLines}`,amt:regularLines*R.existingLine,color:"var(--blue)"});
+    if(homeLines>0) items.push({label:`Home×${homeLines}`,amt:homeLines*R.homeLine,color:"var(--orange)"});
   } else {
     if(regularLines>=1) items.push({label:"1st line",amt:R.newLine1,color:"var(--green)"});
     if(regularLines>=2) items.push({label:`+${regularLines-1}L`,amt:(regularLines-1)*R.newLineN,color:"var(--blue)"});
@@ -1258,8 +1279,10 @@ async function apiDelete(path){
 function setType(t){
   obType=t;
   document.getElementById("btn-new").className  ="type-btn"+(t==="new"?" new-on":"");
+  document.getElementById("btn-existing").className="type-btn"+(t==="existing"?" existing-on":"");
   document.getElementById("btn-react").className="type-btn"+(t==="reactivation"?" react-on":"");
   document.getElementById("react-info").style.display=t==="reactivation"?"block":"none";
+  document.getElementById("existing-info").style.display=t==="existing"?"block":"none";
   updateCalc();
 }
 
@@ -1314,6 +1337,9 @@ function updateCalc(){
     if(lines>=1) note+=`<span style="color:var(--green)">1st ${fmt(R.newLine1)}`;
     if(lines>=2) note+=` · +${lines-1}×${fmt(R.newLineN)}</span>`;
     else note+="</span>";
+    if(home>0) note+=`<span style="color:var(--orange)"> · ${home} home×${fmt(R.homeLine)}</span>`;
+  } else if(valid && obType==="existing"){
+    note=`<span style="color:var(--blue)">${lines} line×${fmt(R.existingLine)}</span>`;
     if(home>0) note+=`<span style="color:var(--orange)"> · ${home} home×${fmt(R.homeLine)}</span>`;
   } else if(valid && obType==="reactivation"){
     note=`<span style="color:var(--purple)">${lines+home} lines×${fmt(R.reactivation)}</span>`;
@@ -1627,7 +1653,7 @@ function renderHistory(){
         return `<div class="order-row">${cb}
           <div style="flex:1">
             <div class="order-tags">
-              <span class="tag" style="background:${o.type==="reactivation"?"#a78bfa22":"#00e5a022"};border:1px solid ${o.type==="reactivation"?"#a78bfa50":"#00e5a050"};color:${o.type==="reactivation"?"var(--purple)":"var(--green)"}">${o.type==="reactivation"?"Reactivation":"New Activation"}</span>
+              <span class="tag" style="background:#${typeInfo(o.type).hex}22;border:1px solid #${typeInfo(o.type).hex}50;color:${typeInfo(o.type).color}">${typeInfo(o.type).label}</span>
               ${o.regularLines>0?`<span class="tag" style="background:#00b8ff22;border:1px solid #00b8ff50;color:var(--blue)">${o.regularLines} line${o.regularLines>1?"s":""}</span>`:""}
               ${o.homeLines>0?`<span class="tag" style="background:#fb923c22;border:1px solid #fb923c50;color:var(--orange)">${o.homeLines} home</span>`:""}
               ${o.perAccount&&o.perAccount.aarp?`<span class="tag" style="background:#facc1522;border:1px solid #facc1550;color:var(--yellow)">AARP</span>`:""}
@@ -1712,36 +1738,38 @@ async function bulkDelete(){
 function tallyVals(){
   const g=id=>parseInt(document.getElementById(id).value)||0;
   return { date:document.getElementById("t-date").value||today(),
-    deals:g("t-deals"), newLines:g("t-newlines"), reactLines:g("t-react"), home:g("t-home"),
+    deals:g("t-deals"), newLines:g("t-newlines"), existingLines:g("t-existing"), reactLines:g("t-react"), home:g("t-home"),
     autopay:g("t-autopay"), aarp:g("t-aarp"), device:g("t-device"), protection:g("t-prot"),
     accessories:g("t-acc"), iris:g("t-iris"), tablet:g("t-tablet"), watch:g("t-watch") };
 }
 function tallyCommission(v){
-  return v.deals*25 + Math.max(0,v.newLines-v.deals)*15 + v.reactLines*10 + v.home*10
-       + v.protection*2 + v.device*1 + v.accessories*1 + v.autopay*1 + v.aarp*1
-       + v.iris*10 + v.tablet*10 + v.watch*5;
+  return v.deals*R.newLine1 + Math.max(0,v.newLines-v.deals)*R.newLineN + v.existingLines*R.existingLine
+       + v.reactLines*R.reactivation + v.home*R.homeLine
+       + v.protection*R.protection + v.device*1 + v.accessories*1 + v.autopay*1 + v.aarp*1
+       + v.iris*R.irisAlly + v.tablet*R.tablet + v.watch*R.watch;
 }
 function tallyBreakdown(v){
   const it=[];
   const first=Math.min(v.deals,v.newLines), extra=Math.max(0,v.newLines-v.deals);
-  if(first>0) it.push({label:`${first} 1st line`,amt:first*25,color:"var(--green)"});
-  if(extra>0) it.push({label:`+${extra} line`,amt:extra*15,color:"var(--blue)"});
-  if(v.reactLines>0) it.push({label:`React ${v.reactLines}`,amt:v.reactLines*10,color:"var(--purple)"});
-  if(v.home>0) it.push({label:`Home ${v.home}`,amt:v.home*10,color:"var(--orange)"});
-  if(v.protection>0) it.push({label:`Prot ${v.protection}`,amt:v.protection*2,color:"var(--pink)"});
+  if(first>0) it.push({label:`${first} 1st line`,amt:first*R.newLine1,color:"var(--green)"});
+  if(extra>0) it.push({label:`+${extra} line`,amt:extra*R.newLineN,color:"var(--blue)"});
+  if(v.existingLines>0) it.push({label:`Existing ${v.existingLines}`,amt:v.existingLines*R.existingLine,color:"var(--blue)"});
+  if(v.reactLines>0) it.push({label:`React ${v.reactLines}`,amt:v.reactLines*R.reactivation,color:"var(--purple)"});
+  if(v.home>0) it.push({label:`Home ${v.home}`,amt:v.home*R.homeLine,color:"var(--orange)"});
+  if(v.protection>0) it.push({label:`Prot ${v.protection}`,amt:v.protection*R.protection,color:"var(--pink)"});
   if(v.device>0) it.push({label:`Dev ${v.device}`,amt:v.device,color:"var(--pink)"});
   if(v.accessories>0) it.push({label:`Acc ${v.accessories}`,amt:v.accessories,color:"var(--pink)"});
   if(v.autopay>0) it.push({label:`ACH ${v.autopay}`,amt:v.autopay,color:"var(--yellow)"});
   if(v.aarp>0) it.push({label:`AARP ${v.aarp}`,amt:v.aarp,color:"var(--yellow)"});
-  if(v.iris>0) it.push({label:`Iris ${v.iris}`,amt:v.iris*10,color:"var(--orange)"});
-  if(v.tablet>0) it.push({label:`Tablet ${v.tablet}`,amt:v.tablet*10,color:"var(--blue)"});
-  if(v.watch>0) it.push({label:`Watch ${v.watch}`,amt:v.watch*5,color:"var(--purple)"});
+  if(v.iris>0) it.push({label:`Iris ${v.iris}`,amt:v.iris*R.irisAlly,color:"var(--orange)"});
+  if(v.tablet>0) it.push({label:`Tablet ${v.tablet}`,amt:v.tablet*R.tablet,color:"var(--blue)"});
+  if(v.watch>0) it.push({label:`Watch ${v.watch}`,amt:v.watch*R.watch,color:"var(--purple)"});
   return it;
 }
 function calcTally(){ document.getElementById("t-total").textContent=fmt(tallyCommission(tallyVals())); }
 function openTally(){
   document.getElementById("t-date").value=today();
-  ["t-deals","t-newlines","t-react","t-home","t-autopay","t-aarp","t-device","t-prot","t-acc","t-iris","t-tablet","t-watch"].forEach(id=>document.getElementById(id).value="");
+  ["t-deals","t-newlines","t-existing","t-react","t-home","t-autopay","t-aarp","t-device","t-prot","t-acc","t-iris","t-tablet","t-watch"].forEach(id=>document.getElementById(id).value="");
   calcTally();
   document.getElementById("tally-modal").style.display="flex";
 }
@@ -1751,10 +1779,10 @@ async function submitTally(){
   if(total<=0){ showToast("Enter some numbers first"); return; }
   const order={
     date:v.date, type:"new", source:"tally",
-    regularLines:v.newLines+v.reactLines, homeLines:v.home,
+    regularLines:v.newLines+v.existingLines+v.reactLines, homeLines:v.home,
     perAccount:{aarp:v.aarp>0, autopay:v.autopay>0},
     perDevice:{device:v.device,protection:v.protection,accessories:v.accessories,irisAlly:v.iris,tabletWithLine:v.tablet,watchWithLine:v.watch},
-    tally:{deals:v.deals,newLines:v.newLines,reactLines:v.reactLines,autopay:v.autopay,aarp:v.aarp},
+    tally:{deals:v.deals,newLines:v.newLines,existingLines:v.existingLines,reactLines:v.reactLines,autopay:v.autopay,aarp:v.aarp},
     note:`Daily tally${v.deals?` · ${v.deals} deals`:""}`,
     commission:total, breakdown:tallyBreakdown(v),
   };
@@ -1856,6 +1884,14 @@ function pcWeekOptions(sel){
 }
 function populatePcWeeks(sel){ document.getElementById("pc-weekstart").innerHTML=pcWeekOptions(sel||getWeekStart(today())); }
 function pcTax(p){ return (Number(p.fitw)||0)+(Number(p.fl)||0)+(Number(p.med)||0)+(Number(p.ss)||0); }
+// New-Account lines for a week (tally orders use their stored newLines count; regular orders use regularLines when type==="new")
+function weekNewLines(wk){
+  return ((wk&&wk.orders)||[]).reduce((s,o)=>{
+    if(o.source==="tally") return s+(o.tally&&o.tally.newLines||0);
+    return s+(o.type==="new"?(o.regularLines||0):0);
+  },0);
+}
+function weekAdhBonus(p,wk){ return p&&p.adh ? weekNewLines(wk)*R.adhBonus : 0; }
 function updatePcNet(){
   const g=id=>Number(document.getElementById(id).value)||0;
   document.getElementById("pc-net").textContent=fmt(g("pc-amount")-(g("pc-fitw")+g("pc-fl")+g("pc-med")+g("pc-ss")));
@@ -1863,7 +1899,9 @@ function updatePcNet(){
 
 function renderPaychecks(){
   const wd=getWeeklyData();
-  const totalEarned=orders.reduce((s,o)=>s+o.commission,0);
+  const totalTracked=orders.reduce((s,o)=>s+o.commission,0);
+  const totalAdhBonus=paychecks.reduce((s,p)=>s+weekAdhBonus(p,wd[p.weekStart]),0);
+  const totalEarned=totalTracked+totalAdhBonus;
   const totalPaid=paychecks.reduce((s,p)=>s+Number(p.amount),0);
   const totalTax=paychecks.reduce((s,p)=>s+pcTax(p),0);
   const delta=totalEarned-totalPaid;
@@ -1883,13 +1921,14 @@ function renderPaychecks(){
 
   list.innerHTML=[...paychecks].sort((a,b)=>b.weekStart.localeCompare(a.weekStart)).map(p=>{
     const wk=wd[p.weekStart];
-    const exp=wk?wk.earned:0;
+    const adhBonus=weekAdhBonus(p,wk);
+    const exp=(wk?wk.earned:0)+adhBonus;
     const rec=Number(p.amount);
     const tax=pcTax(p);
     const d=exp-rec;
     return `<div class="pc-row" style="margin-bottom:10px">
       <div style="flex:1">
-        <div class="week-range">${weekLabel(p.weekStart)}</div>
+        <div class="week-range">${weekLabel(p.weekStart)}${adhBonus>0?` <span class="lbl" style="color:var(--yellow)">· ADH +${fmt(adhBonus)}</span>`:""}</div>
         <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">
           <div><div class="lbl">Expected</div><div style="font-size:13px;font-weight:700;color:var(--green)">${fmt(exp)}</div></div>
           <div><div class="lbl">Received</div><div style="font-size:13px;font-weight:700;color:var(--blue)">${fmt(rec)}</div></div>
@@ -1911,8 +1950,9 @@ async function savePaycheck(){
   const g=id=>Number(document.getElementById(id).value)||0;
   const amt=document.getElementById("pc-amount").value;
   if(!ws||amt===""){ showToast("Pick a week and enter the gross amount"); return; }
+  const adh=document.getElementById("pc-adh").checked;
   try{
-    await withRetry(()=>apiPost("/paychecks",{weekStart:ws,amount:Number(amt)||0,fitw:g("pc-fitw"),fl:g("pc-fl"),med:g("pc-med"),ss:g("pc-ss")}));
+    await withRetry(()=>apiPost("/paychecks",{weekStart:ws,amount:Number(amt)||0,fitw:g("pc-fitw"),fl:g("pc-fl"),med:g("pc-med"),ss:g("pc-ss"),adh}));
     await loadData();
     cancelPcEdit();
     showToast("✓ Paycheck saved");
@@ -1928,6 +1968,7 @@ function editPc(ws){
   document.getElementById("pc-fl").value=p.fl||"";
   document.getElementById("pc-med").value=p.med||"";
   document.getElementById("pc-ss").value=p.ss||"";
+  document.getElementById("pc-adh").checked=!!p.adh;
   updatePcNet();
   document.getElementById("pc-form-title").textContent="Edit Paycheck — "+weekLabel(ws);
   document.getElementById("pc-cancel").style.display="inline-block";
@@ -1936,6 +1977,7 @@ function editPc(ws){
 function cancelPcEdit(){
   editingPc=null;
   ["pc-amount","pc-fitw","pc-fl","pc-med","pc-ss"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("pc-adh").checked=false;
   populatePcWeeks();
   updatePcNet();
   document.getElementById("pc-form-title").textContent="Log Paycheck Received";
@@ -1974,8 +2016,8 @@ function renderGoals(){
   const avgWk=ws.length?totalEarned/ws.length:0;
 
   // Type breakdown
-  const tb={new:{count:0,earned:0},reactivation:{count:0,earned:0}};
-  orders.forEach(o=>{ tb[o.type].count++;tb[o.type].earned+=o.commission; });
+  const tb={new:{count:0,earned:0},existing:{count:0,earned:0},reactivation:{count:0,earned:0}};
+  orders.forEach(o=>{ const k=tb[o.type]?o.type:"new"; tb[k].count++;tb[k].earned+=o.commission; });
 
   const wg=Number(weekGoal)||0;
   const mg=Number(monthGoal)||0;
@@ -2129,12 +2171,12 @@ function renderGoals(){
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">Order Type Breakdown</div>
       <div class="type-cards">
-        ${["new","reactivation"].map(t=>`
+        ${["new","existing","reactivation"].map(t=>`
           <div class="type-card">
-            <div class="type-label" style="color:${t==="new"?"var(--green)":"var(--purple)"}">${t==="new"?"New Activations":"Reactivations"}</div>
+            <div class="type-label" style="color:${typeInfo(t).color}">${t==="new"?"New Activations":t==="existing"?"Existing Cust.":"Reactivations"}</div>
             <div class="type-count">${tb[t].count}</div>
             <div class="type-earned">${fmt(tb[t].earned)} earned</div>
-            <div class="type-bar"><div style="height:100%;width:${orders.length?(tb[t].count/orders.length)*100:0}%;background:${t==="new"?"var(--green)":"var(--purple)"};border-radius:2px"></div></div>
+            <div class="type-bar"><div style="height:100%;width:${orders.length?(tb[t].count/orders.length)*100:0}%;background:${typeInfo(t).color};border-radius:2px"></div></div>
           </div>`).join("")}
       </div>
     </div>`:""}
