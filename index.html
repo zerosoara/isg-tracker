@@ -548,7 +548,7 @@
         <div class="pill-val" id="pill-diff" style="font-size:12px">$0 / $0</div>
         <div class="pill-lbl">Paid / Tracked</div>
       </div>
-      <div class="pill" style="border:1px solid #facc1528">
+      <div class="pill" id="pill-hourly-wrap" style="border:1px solid #facc1528">
         <div class="pill-val" id="pill-hourly">+$0.00</div>
         <div class="pill-lbl">vs Hourly</div>
       </div>
@@ -773,7 +773,7 @@
       <div class="row">
         <div class="field">
           <label class="lbl">Week</label>
-          <select id="pc-weekstart"></select>
+          <select id="pc-weekstart" onchange="updateAdhHint()"></select>
         </div>
         <div class="field">
           <label class="lbl">Gross received</label>
@@ -796,6 +796,7 @@
       <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:12px;color:var(--dim)">
         <input type="checkbox" id="pc-adh" style="width:auto"/> Hit 85%+ ADH this pay period (+$2 per New Account line)
       </label>
+      <div class="lbl" id="pc-adh-hint" style="margin-top:4px;margin-left:24px"></div>
       <div class="row" style="margin-top:12px">
         <button class="btn-primary" onclick="savePaycheck()">Save</button>
         <button class="btn-ghost" id="pc-cancel" style="display:none" onclick="cancelPcEdit()">Cancel</button>
@@ -955,6 +956,7 @@ function migrateSchedule(v){
 let hourlySchedule = migrateSchedule(localStorage.getItem("hourlySchedule") || "A");
 let taxRate    = Number(localStorage.getItem("taxRate")) || 25;
 let attendance = JSON.parse(localStorage.getItem("attendance") || "{}");  // { "YYYY-MM-DD": hoursWorked }
+let hourlyPaused = localStorage.getItem("hourlyPaused") === "true";  // vacation / no longer working — hides hourly comparisons
 
 function scheduleInfo(key){
   const k = SCHEDULES[key||hourlySchedule] ? (key||hourlySchedule) : "A";
@@ -981,6 +983,11 @@ function setSchedule(key){
   localStorage.setItem("hourlySchedule", hourlySchedule);
   renderGoals(); updatePills(); saveSettings();
 }
+function setHourlyPaused(on){
+  hourlyPaused = !!on;
+  localStorage.setItem("hourlyPaused", hourlyPaused);
+  renderGoals(); updatePills(); saveSettings();
+}
 function setAttendance(ds, hours){
   if (hours === null) delete attendance[ds];          // clear override → back to scheduled
   else attendance[ds] = Number(hours)||0;
@@ -1003,7 +1010,7 @@ function setTaxRate(v){
 // Push goals + schedule + tax + attendance + theme + presets so they sync across devices
 async function saveSettings(){
   if (!authToken) return;
-  try { await apiPost("/settings", { weekGoal:Number(weekGoal)||0, monthGoal:Number(monthGoal)||0, hourlySchedule, taxRate, attendance, theme, customPresets }); }
+  try { await apiPost("/settings", { weekGoal:Number(weekGoal)||0, monthGoal:Number(monthGoal)||0, hourlySchedule, taxRate, attendance, theme, customPresets, hourlyPaused }); }
   catch(e) { /* stays cached locally; will resync next save */ }
 }
 
@@ -1232,6 +1239,7 @@ async function loadData(bg){
       if (d.settings.attendance && typeof d.settings.attendance === "object") attendance = d.settings.attendance;
       if (d.settings.theme && THEMES[d.settings.theme]) { theme = d.settings.theme; applyTheme(theme); }
       if (Array.isArray(d.settings.customPresets)) customPresets = d.settings.customPresets;
+      if (d.settings.hourlyPaused != null) hourlyPaused = !!d.settings.hourlyPaused;
       localStorage.setItem("weekGoal", weekGoal);
       localStorage.setItem("monthGoal", monthGoal);
       localStorage.setItem("hourlySchedule", hourlySchedule);
@@ -1239,6 +1247,7 @@ async function loadData(bg){
       localStorage.setItem("attendance", JSON.stringify(attendance));
       localStorage.setItem("theme", theme);
       localStorage.setItem("customPresets", JSON.stringify(customPresets));
+      localStorage.setItem("hourlyPaused", hourlyPaused);
       renderCustomPresets();
     }
     syncFails=0;
@@ -1529,12 +1538,19 @@ function updatePills(){
   pd.style.color = totalPaid+0.01 < totalEarned ? "var(--yellow)" : "var(--green)";  // yellow = still owed
 
   // vs Hourly — this week's commission vs what your hours would've paid hourly so far
-  const targetSoFar=weekHourlyTargetSoFar();
-  const hDelta=cw.earned-targetSoFar;
-  const ph=document.getElementById("pill-hourly");
-  ph.textContent=(hDelta>=0?"+":"")+fmt(hDelta);
-  ph.style.color=hDelta>=0?"var(--green)":"var(--red)";
-  ph.closest(".pill").style.borderColor=hDelta>=0?"#00e5a028":"#ff6b6b28";
+  // (hidden entirely while hourly tracking is paused — e.g. vacation / no longer working)
+  const hourlyWrap=document.getElementById("pill-hourly-wrap");
+  if(hourlyPaused){
+    hourlyWrap.style.display="none";
+  } else {
+    hourlyWrap.style.display="";
+    const targetSoFar=weekHourlyTargetSoFar();
+    const hDelta=cw.earned-targetSoFar;
+    const ph=document.getElementById("pill-hourly");
+    ph.textContent=(hDelta>=0?"+":"")+fmt(hDelta);
+    ph.style.color=hDelta>=0?"var(--green)":"var(--red)";
+    ph.closest(".pill").style.borderColor=hDelta>=0?"#00e5a028":"#ff6b6b28";
+  }
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -1892,6 +1908,26 @@ function weekNewLines(wk){
   },0);
 }
 function weekAdhBonus(p,wk){ return p&&p.adh ? weekNewLines(wk)*R.adhBonus : 0; }
+// Estimated attendance % for a week, from your own logged hours (NOT the real ADH metric — that
+// lives in ISG's phone system and this app can't see it. This is just a sanity-check hint.)
+function weekAttendancePct(weekStart){
+  let schedTotal=0, effTotal=0;
+  for(let i=0;i<7;i++){
+    const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i);
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const sh=scheduledHours(ds);
+    if(sh>0){ schedTotal+=sh; effTotal+=effectiveHours(ds); }
+  }
+  return schedTotal>0 ? (effTotal/schedTotal)*100 : null;
+}
+function updateAdhHint(){
+  const hintEl=document.getElementById("pc-adh-hint");
+  const ws=document.getElementById("pc-weekstart").value;
+  const pct=ws?weekAttendancePct(ws):null;
+  if(pct==null){ hintEl.textContent=""; return; }
+  hintEl.textContent=`📋 Estimated attendance this week (from your logged hours): ${Math.round(pct)}% — not the real ADH number, just a hint`;
+  hintEl.style.color = pct>=85 ? "var(--green)" : "var(--muted)";
+}
 function updatePcNet(){
   const g=id=>Number(document.getElementById(id).value)||0;
   document.getElementById("pc-net").textContent=fmt(g("pc-amount")-(g("pc-fitw")+g("pc-fl")+g("pc-med")+g("pc-ss")));
@@ -1908,6 +1944,7 @@ function renderPaychecks(){
 
   if(!editingPc) populatePcWeeks();
   updatePcNet();
+  updateAdhHint();
 
   document.getElementById("pc-totals").innerHTML=`
     <div class="total-item"><div class="lbl">Total Expected</div><div class="total-val" style="color:var(--green)">${fmt(totalEarned)}</div></div>
@@ -1970,6 +2007,7 @@ function editPc(ws){
   document.getElementById("pc-ss").value=p.ss||"";
   document.getElementById("pc-adh").checked=!!p.adh;
   updatePcNet();
+  updateAdhHint();
   document.getElementById("pc-form-title").textContent="Edit Paycheck — "+weekLabel(ws);
   document.getElementById("pc-cancel").style.display="inline-block";
   window.scrollTo(0,0);
@@ -1980,6 +2018,7 @@ function cancelPcEdit(){
   document.getElementById("pc-adh").checked=false;
   populatePcWeeks();
   updatePcNet();
+  updateAdhHint();
   document.getElementById("pc-form-title").textContent="Log Paycheck Received";
   document.getElementById("pc-cancel").style.display="none";
 }
@@ -2097,6 +2136,12 @@ function renderGoals(){
   };
 
   el.innerHTML=`
+    ${hourlyPaused?`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">⏸ Hourly Tracking Paused</div>
+      <div class="lbl" style="margin:8px 0 12px;line-height:1.6">No longer working there, or just on vacation? Hourly comparisons (the "vs Hourly" header pill and Beat Your Hourly) are hidden so nothing shows negative. Your History and past data are untouched.</div>
+      <button class="btn-primary" onclick="setHourlyPaused(false)">▶ Resume Hourly Tracking</button>
+    </div>`:`
     <div class="card glow" style="margin-bottom:12px">
       <div class="card-title">💪 Beat Your Hourly</div>
       <div class="field" style="margin-bottom:12px">
@@ -2137,7 +2182,8 @@ function renderGoals(){
         }).join("")}
       </div>
       <div class="lbl" style="margin-top:12px;line-height:1.6">📅 This week: ${fmt(weekEarned)} vs ${fmt(weeklyTargetEff)} hourly = <span style="color:${weekTargetDelta>=0?'var(--green)':'var(--red)'}">${weekTargetDelta>=0?"+":""}${fmt(weekTargetDelta)}</span>${bestD&&bestA>0?` · best day ${bestD.name} ${fmt(bestA)}`:""}</div>
-    </div>
+      <button class="btn-ghost" style="margin-top:10px;font-size:10px" onclick="setHourlyPaused(true)">⏸ Pause hourly tracking (vacation / not currently working)</button>
+    </div>`}
 
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">💰 Tax Set-Aside</div>
