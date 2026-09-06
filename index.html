@@ -732,6 +732,7 @@
         <div><div class="lbl">Home Lines</div><div id="today-home" style="font-size:16px;font-weight:700;color:var(--orange)"></div></div>
         <div><div class="lbl">Tablet Lines</div><div id="today-tablet" style="font-size:16px;font-weight:700;color:var(--purple)"></div></div>
         <div><div class="lbl">Watch Lines</div><div id="today-watch" style="font-size:16px;font-weight:700;color:var(--pink)"></div></div>
+        <div id="today-iris-wrap" style="display:none"><div class="lbl">Iris Ally</div><div id="today-iris" style="font-size:16px;font-weight:700;color:var(--orange)"></div></div>
       </div>
     </div>
   </div>
@@ -1431,11 +1432,14 @@ function updateTodayCard(){
     const home  =todayOrders.reduce((s,o)=>s+(o.homeLines||0),0);
     const tablet=todayOrders.reduce((s,o)=>s+((o.perDevice&&o.perDevice.tabletWithLine)||0),0);
     const watch =todayOrders.reduce((s,o)=>s+((o.perDevice&&o.perDevice.watchWithLine)||0),0);
+    const iris  =todayOrders.reduce((s,o)=>s+((o.perDevice&&o.perDevice.irisAlly)||0),0);
     document.getElementById("today-cell").textContent=cell;
     document.getElementById("today-home").textContent=home;
     document.getElementById("today-tablet").textContent=tablet;
     document.getElementById("today-watch").textContent=watch;
     document.getElementById("today-lines").textContent=cell+home+tablet+watch;
+    document.getElementById("today-iris-wrap").style.display=iris>0?"block":"none";
+    document.getElementById("today-iris").textContent=iris;
   } else { card.style.display="none"; }
 }
 
@@ -1593,11 +1597,12 @@ function renderHistory(){
     const dCount=dos.length;
     const dsum=k=>dos.reduce((s,o)=>s+(k==="reg"?(o.regularLines||0):k==="home"?(o.homeLines||0):((o.perDevice&&o.perDevice[k])||0)),0);
     const dLines=dsum("reg")+dsum("home")+dsum("tabletWithLine")+dsum("watchWithLine");
+    const dIris=dsum("irisAlly");
     const chip=(lbl,n,color)=>n>0?`<span class="tag" style="background:${color}18;border:1px solid ${color}45;color:${color}">${lbl} ${n}</span>`:"";
-    const bd=[chip("Cell",dsum("reg"),"#00b8ff"),chip("Home",dsum("home"),"#fb923c"),chip("Tablet",dsum("tabletWithLine"),"#00b8ff"),chip("Watch",dsum("watchWithLine"),"#a78bfa"),chip("Iris",dsum("irisAlly"),"#fb923c"),chip("Devices",dsum("device"),"#f472b6"),chip("Protection",dsum("protection"),"#f472b6"),chip("Accessories",dsum("accessories"),"#f472b6")].join("");
+    const bd=[chip("Cell",dsum("reg"),"#00b8ff"),chip("Home",dsum("home"),"#fb923c"),chip("Tablet",dsum("tabletWithLine"),"#00b8ff"),chip("Watch",dsum("watchWithLine"),"#a78bfa"),chip("Iris",dIris,"#fb923c"),chip("Devices",dsum("device"),"#f472b6"),chip("Protection",dsum("protection"),"#f472b6"),chip("Accessories",dsum("accessories"),"#f472b6")].join("");
     return `<div class="day-block" style="margin-bottom:12px">
       <div class="day-head" style="cursor:pointer" onclick="var x=document.getElementById('daybd-${day}');x.style.display=x.style.display==='none'?'flex':'none'">
-        <span class="day-lbl">▾ ${fmtDate(day)} <span style="color:var(--muted);font-size:11px;font-weight:400">· ${dCount} order${dCount!==1?"s":""} · ${dLines} line${dLines!==1?"s":""}</span></span>
+        <span class="day-lbl">▾ ${fmtDate(day)} <span style="color:var(--muted);font-size:11px;font-weight:400">· ${dCount} order${dCount!==1?"s":""} · ${dLines} line${dLines!==1?"s":""}${dIris>0?` · ${dIris} iris`:""}</span></span>
         <span class="day-total">${fmt(dt)}</span>
       </div>
       <div id="daybd-${day}" style="display:none;flex-wrap:wrap;gap:6px;margin:2px 0 8px;padding:8px;background:var(--bg3);border-radius:8px">${bd||'<span class="lbl">no line items</span>'}</div>
