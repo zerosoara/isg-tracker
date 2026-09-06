@@ -79,6 +79,7 @@ const PaycheckSchema = new mongoose.Schema({
   fl:        { type: Number, default: 0 },  // FL / state line
   med:       { type: Number, default: 0 },  // Medicare
   ss:        { type: Number, default: 0 },  // Social Security
+  adh:       { type: Boolean, default: false }, // hit 85%+ ADH this pay period -> +$2/New Account line bonus
 });
 
 const User     = mongoose.model("User",     UserSchema);
@@ -103,13 +104,16 @@ async function authMiddleware(req, res, next) {
 }
 
 // ── Commission calc ───────────────────────────────────────────────────────────
-const RATES = { newLine1:25, newLineN:15, reactivation:10, homeLine:10, irisAlly:10, tablet:10, watch:5, protection:2 };
+const RATES = { newLine1:25, newLineN:15, existingLine:15, reactivation:10, homeLine:15, irisAlly:15, tablet:10, watch:5, protection:2 };
 
 function calcCommission(o) {
   const { type, regularLines, homeLines, perAccount, perDevice } = o;
   let t = 0;
   if (type === "reactivation") {
     t += (regularLines + homeLines) * RATES.reactivation;
+  } else if (type === "existing") {
+    t += (regularLines || 0) * RATES.existingLine;
+    t += (homeLines || 0) * RATES.homeLine;
   } else {
     if (regularLines >= 1) t += RATES.newLine1;
     if (regularLines >= 2) t += (regularLines - 1) * RATES.newLineN;
@@ -132,6 +136,9 @@ function buildBreakdown(o) {
   if (type === "reactivation") {
     const l = regularLines + homeLines;
     if (l > 0) items.push({ label:`Reactivation (${l}L)`, amt:l*RATES.reactivation, color:"#a78bfa" });
+  } else if (type === "existing") {
+    if (regularLines > 0) items.push({ label:`Existing×${regularLines}`, amt:regularLines*RATES.existingLine, color:"#00b8ff" });
+    if (homeLines > 0)    items.push({ label:`Home×${homeLines}`,        amt:homeLines*RATES.homeLine,        color:"#fb923c" });
   } else {
     if (regularLines >= 1) items.push({ label:"1st Line",             amt:RATES.newLine1,                          color:"#00e5a0" });
     if (regularLines >= 2) items.push({ label:`+${regularLines-1}L`,  amt:(regularLines-1)*RATES.newLineN,         color:"#00b8ff" });
@@ -302,10 +309,10 @@ app.delete("/orders/:id", authMiddleware, async (req, res) => {
 app.post("/paychecks", authMiddleware, async (req, res) => {
   try {
     const uid = String(req.user._id);
-    const { weekStart, amount, fitw, fl, med, ss } = req.body;
+    const { weekStart, amount, fitw, fl, med, ss, adh } = req.body;
     await Paycheck.findOneAndUpdate(
       { userId:uid, weekStart },
-      { amount:Number(amount)||0, fitw:Number(fitw)||0, fl:Number(fl)||0, med:Number(med)||0, ss:Number(ss)||0 },
+      { amount:Number(amount)||0, fitw:Number(fitw)||0, fl:Number(fl)||0, med:Number(med)||0, ss:Number(ss)||0, adh:!!adh },
       { upsert:true }
     );
     res.json({ success:true });
