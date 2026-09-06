@@ -38,6 +38,7 @@ const UserSchema = new mongoose.Schema({
     attendance:     { type: mongoose.Schema.Types.Mixed, default: {} },
     // customPresets: [{ name, cfg:{...order config} }]
     customPresets:  { type: mongoose.Schema.Types.Mixed, default: [] },
+    hourlyPaused:   { type: Boolean, default: false }, // vacation / no longer working — hides hourly comparisons
   },
   createdAt: { type: Date, default: Date.now },
 });
@@ -207,13 +208,14 @@ app.get("/data", authMiddleware, async (req, res) => {
 // Save per-user settings (goals + hourly schedule) so they sync across devices
 app.post("/settings", authMiddleware, async (req, res) => {
   try {
-    const { weekGoal, monthGoal, hourlySchedule, taxRate, attendance, theme, customPresets } = req.body;
+    const { weekGoal, monthGoal, hourlySchedule, taxRate, attendance, theme, customPresets, hourlyPaused } = req.body;
     req.user.settings = req.user.settings || {};
     if (weekGoal       !== undefined) req.user.settings.weekGoal       = Number(weekGoal) || 0;
     if (monthGoal      !== undefined) req.user.settings.monthGoal      = Number(monthGoal) || 0;
     if (hourlySchedule !== undefined) req.user.settings.hourlySchedule = hourlySchedule;
     if (taxRate        !== undefined) req.user.settings.taxRate        = Number(taxRate) || 0;
     if (theme          !== undefined) req.user.settings.theme          = theme;
+    if (hourlyPaused   !== undefined) req.user.settings.hourlyPaused   = !!hourlyPaused;
     if (attendance     !== undefined) {
       req.user.settings.attendance = attendance;       // full map; small enough to send whole
       req.user.markModified("settings.attendance");    // Mixed type needs this to persist
