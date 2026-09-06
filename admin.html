@@ -174,6 +174,7 @@
         <select class="filter-select" id="order-type-filter" onchange="renderOrders()">
           <option value="">All types</option>
           <option value="new">New Activation</option>
+          <option value="existing">Existing Customer</option>
           <option value="reactivation">Reactivation</option>
         </select>
         <button class="export-btn" onclick="exportOrders()">⬇ Export CSV</button>
@@ -224,7 +225,7 @@
     <div class="mrow">
       <div class="mfield"><label>Date</label><input type="date" id="m-date"/></div>
       <div class="mfield"><label>Type</label>
-        <select id="m-type"><option value="new">New Activation</option><option value="reactivation">Reactivation</option></select>
+        <select id="m-type"><option value="new">New Activation</option><option value="existing">Existing Customer</option><option value="reactivation">Reactivation</option></select>
       </div>
     </div>
     <div class="mrow">
@@ -268,7 +269,12 @@ let bdGrain = "week";    // 'day' | 'week' | 'month'
 let activityChart = null;
 
 // Commission rates (for add-on $ contribution display only)
-const RATES = { device:1, protection:2, accessories:1, irisAlly:10, tablet:10, watch:5, aarp:1, autopay:1 };
+const RATES = { device:1, protection:2, accessories:1, irisAlly:15, tablet:10, watch:5, aarp:1, autopay:1 };
+function typeInfo(type){
+  if(type==="reactivation") return { label:"Reactivation",      color:"var(--purple)" };
+  if(type==="existing")     return { label:"Existing Customer", color:"var(--blue)" };
+  return                           { label:"New Activation",    color:"var(--green)" };
+}
 
 function fmt(n){ return "$"+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
 function fmtDate(ds){ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
@@ -427,8 +433,8 @@ function renderOrders(){
   const rows = filtered.map(o=>{
     const user  = allUsers.find(u=>u.id===o.userId);
     const uName = user ? user.name : "Unknown";
-    const color = o.type==="reactivation"?"var(--purple)":"var(--green)";
-    const label = o.type==="reactivation"?"Reactivation":"New Activation";
+    const color = typeInfo(o.type).color;
+    const label = typeInfo(o.type).label;
     return `<tr>
       <td style="color:var(--muted)">${fmtDate(o.date)}</td>
       <td style="color:var(--text);font-weight:600">${uName}</td>
@@ -550,18 +556,20 @@ function renderBreakdown(){
 }
 
 function splitBucket(orders){
-  const b = { newC:0, newA:0, reC:0, reA:0 };
+  const b = { newC:0, newA:0, exC:0, exA:0, reC:0, reA:0 };
   orders.forEach(o=>{
     if (o.type==="reactivation"){ b.reC++; b.reA+=o.commission||0; }
+    else if (o.type==="existing"){ b.exC++; b.exA+=o.commission||0; }
     else { b.newC++; b.newA+=o.commission||0; }
   });
   return b;
 }
 function bucketRow(label,b){
-  const total=b.newA+b.reA;
+  const total=b.newA+b.exA+b.reA;
   return `<tr>
     <td style="color:var(--dim)">${label}</td>
     <td style="color:var(--green)">${b.newC} · ${fmt(b.newA)}</td>
+    <td style="color:var(--blue)">${b.exC} · ${fmt(b.exA)}</td>
     <td style="color:var(--purple)">${b.reC} · ${fmt(b.reA)}</td>
     <td style="color:var(--text);font-weight:700">${fmt(total)}</td>
   </tr>`;
@@ -585,7 +593,7 @@ function bdByUserHTML(){
         <div><div class="bd-name">${u.name||""}</div><div class="bd-sub">${u.email||""} · ${uo.length} orders</div></div>
         <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--green)">${fmt(total)}</div>
       </div>
-      <table><thead><tr><th>${bdGrain}</th><th>New (#·$)</th><th>Reactivation (#·$)</th><th>Total</th></tr></thead>
+      <table><thead><tr><th>${bdGrain}</th><th>New (#·$)</th><th>Existing (#·$)</th><th>Reactivation (#·$)</th><th>Total</th></tr></thead>
       <tbody>${rows}</tbody></table>
     </div>`;
   }).join("");
@@ -613,7 +621,7 @@ function bdByPeriodHTML(){
         <div class="bd-name">${periodLabel(k)}</div>
         <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--green)">${fmt(ptotal)}</div>
       </div>
-      <table><thead><tr><th>User</th><th>New (#·$)</th><th>Reactivation (#·$)</th><th>Total</th></tr></thead>
+      <table><thead><tr><th>User</th><th>New (#·$)</th><th>Existing (#·$)</th><th>Reactivation (#·$)</th><th>Total</th></tr></thead>
       <tbody>${userRows}</tbody></table>
     </div>`;
   }).join("");
