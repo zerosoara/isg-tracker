@@ -364,13 +364,18 @@ function renderUsers(){
     const uOrders = allOrders.filter(o=>o.userId===u.id);
     const comm    = uOrders.reduce((s,o)=>s+(o.commission||0),0);
     const joined  = u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "—";
+    const s = u.settings || {};
+    const statusLabel = s.comped ? "🎁 Comped" : s.paid ? (s.foundingMember ? "⭐ Founding" : "✅ Paid") : "❌ Unpaid";
+    const statusColor = (s.comped || s.paid) ? "var(--green)" : "var(--red)";
     return `<tr>
       <td style="color:var(--text);font-weight:600">${u.name||""}</td>
       <td style="color:var(--muted)">${u.email||""}</td>
       <td style="color:var(--blue)">${uOrders.length}</td>
       <td style="color:var(--green)">${fmt(comm)}</td>
+      <td style="color:${statusColor};font-size:11px;white-space:nowrap">${statusLabel}</td>
       <td style="color:var(--muted)">${joined}</td>
       <td style="white-space:nowrap">
+        <button class="act-btn" onclick="toggleComp('${u.id}','${(u.name||"").replace(/'/g,"")}',${!s.comped})">${s.comped?"Uncomp":"Comp"}</button>
         <button class="act-btn" onclick="resetUserPw('${u.id}','${(u.email||"").replace(/'/g,"")}')">Reset PW</button>
         <button class="act-btn" onclick="forceLogout('${u.id}','${(u.email||"").replace(/'/g,"")}')">Logout</button>
         <button class="act-btn danger" onclick="deleteUser('${u.id}','${(u.name||"").replace(/'/g,"")}')">Delete</button>
@@ -380,9 +385,19 @@ function renderUsers(){
 
   document.getElementById("users-table").innerHTML=`
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Orders</th><th>Commission</th><th>Joined</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Orders</th><th>Commission</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+}
+
+// Grant/revoke free access (bypasses the paid-subscription requirement)
+async function toggleComp(id,name,comped){
+  if (!confirm(`${comped?"Grant":"Remove"} free access ${comped?"for":"from"} ${name||"this user"}?`)) return;
+  try {
+    const r = await adminFetch(`/admin/users/${id}/comp`, { method:"POST", body:JSON.stringify({ comped }) });
+    if (!r.ok) { alert(await adminErrMsg(r)); return; }
+    await loadAll();
+  } catch(e){ alert("Can't reach the server. Check your connection."); }
 }
 
 // ── User actions ────────────────────────────────────────────────────────────────
