@@ -523,6 +523,35 @@
   </div>
 </div>
 
+<!-- SUBSCRIBE SCREEN (shown once logged in if the account has no active subscription / comp access) -->
+<div class="auth-screen" id="subscribe-screen" style="display:none">
+  <div class="auth-box" style="max-width:380px">
+    <div class="auth-logo">🥷 Ninja Tracker</div>
+    <div class="auth-sub">Unlock Full Access</div>
+    <div id="founding-banner" style="display:none;background:linear-gradient(135deg,#00e5a022,#00b8ff22);border:1px solid var(--green);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--green);font-size:15px">🔥 FOUNDING MEMBER DEAL</div>
+      <div style="font-size:12px;color:var(--dim);margin-top:4px" id="founding-spots-text"></div>
+    </div>
+    <div style="text-align:center;margin:14px 0">
+      <div id="sub-price-strike" style="font-size:13px;color:var(--muted);text-decoration:line-through;display:none"></div>
+      <div style="font-family:'Syne',sans-serif;font-size:34px;font-weight:800;color:var(--text)"><span id="sub-price-display">$19.99</span></div>
+      <div class="lbl">/ month · cancel anytime</div>
+    </div>
+    <ul style="font-size:12px;color:var(--dim);line-height:2;margin:0 0 16px;padding-left:18px">
+      <li>Unlimited order &amp; paycheck tracking</li>
+      <li>Auto-capture via the Chrome extension</li>
+      <li>Beat Your Hourly, tax set-aside, and more</li>
+      <li>Catch underpayment before it slips by</li>
+    </ul>
+    <button class="auth-btn" id="subscribe-btn" onclick="startCheckout()">Subscribe Now</button>
+    <div class="auth-error" id="subscribe-error"></div>
+    <div style="text-align:center;margin-top:14px">
+      <span class="auth-user-name" id="subscribe-header-name" style="font-size:11px;color:var(--muted)"></span>
+      <button class="auth-link" onclick="doLogout()">Log out</button>
+    </div>
+  </div>
+</div>
+
 <header class="header">
   <div class="header-inner">
     <div>
@@ -533,6 +562,7 @@
       <div class="auth-user-bar">
         <span>👤</span>
         <span class="auth-user-name" id="header-name"></span>
+        <button class="auth-logout" id="manage-sub-btn" style="display:none" onclick="openBillingPortal()">Manage Plan</button>
         <button class="auth-logout" onclick="doLogout()">Log out</button>
       </div>
       <div class="pills">
@@ -557,12 +587,12 @@
   </div>
 </header>
 
-<div class="sync-bar">
+<div class="sync-bar" id="sync-bar">
   <div class="sync-dot" id="sync-dot"></div>
   <span id="sync-text">CONNECTING TO BACKEND...</span>
 </div>
 
-<nav>
+<nav id="main-nav">
   <button class="nav-btn active" onclick="showView('order')">New Order</button>
   <button class="nav-btn" onclick="showView('history')">History</button>
   <button class="nav-btn" onclick="showView('week')">Weekly</button>
@@ -570,7 +600,7 @@
   <button class="nav-btn" onclick="showView('goals')">Goals</button>
 </nav>
 
-<main>
+<main id="main-app">
   <!-- ORDER BUILDER -->
   <div id="view-order" class="col">
     <div id="edit-banner" class="edit-banner" style="display:none">
@@ -1250,9 +1280,10 @@ async function loadData(bg){
       localStorage.setItem("hourlyPaused", hourlyPaused);
       renderCustomPresets();
     }
+    applyBillingState(d.billing);
     syncFails=0;
     setSyncStatus(true);
-    updateAll();
+    if (d.billing && d.billing.hasAccess) updateAll();
   } catch(e){
     // brief blips happen (phone signal, a deploy restart, slow DB) — don't cry wolf.
     syncFails++;
@@ -1268,6 +1299,54 @@ function setSyncStatus(ok){
   const txt=document.getElementById("sync-text");
   dot.className="sync-dot "+(ok?"ok":"error");
   txt.textContent=ok?"LIVE — orders sync automatically":"OFFLINE — check render.com";
+}
+
+// ── Billing / Subscription ──────────────────────────────────────────────────────
+function applyBillingState(billing){
+  const needsSub = !billing || !billing.hasAccess;
+  document.getElementById("subscribe-screen").style.display = needsSub ? "flex" : "none";
+  document.getElementById("main-nav").style.display = needsSub ? "none" : "flex";
+  document.getElementById("main-app").style.display = needsSub ? "none" : "block";
+  document.getElementById("sync-bar").style.display = needsSub ? "none" : "flex";
+  document.getElementById("manage-sub-btn").style.display = (billing && billing.paid && !billing.comped) ? "inline-block" : "none";
+  if (!needsSub || !billing) return;
+  document.getElementById("subscribe-header-name").textContent = authUser ? authUser.name : "";
+  const spotsLeft = billing.foundingSpotsLeft || 0;
+  const banner = document.getElementById("founding-banner");
+  const priceDisplay = document.getElementById("sub-price-display");
+  const strike = document.getElementById("sub-price-strike");
+  if (spotsLeft > 0 && billing.priceFounding) {
+    banner.style.display = "block";
+    document.getElementById("founding-spots-text").textContent =
+      `Only ${spotsLeft} spot${spotsLeft!==1?"s":""} left at $${billing.priceFounding}/mo — locked in for life!`;
+    priceDisplay.textContent = `$${billing.priceFounding}`;
+    strike.style.display = "block";
+    strike.textContent = `$${billing.priceRegular}/mo`;
+  } else {
+    banner.style.display = "none";
+    priceDisplay.textContent = `$${billing.priceRegular || "19.99"}`;
+    strike.style.display = "none";
+  }
+}
+async function startCheckout(){
+  const btn=document.getElementById("subscribe-btn");
+  const errEl=document.getElementById("subscribe-error");
+  errEl.textContent="";
+  btn.disabled=true; btn.textContent="Redirecting…";
+  try{
+    const r=await fetch(`${API}/billing/checkout`,{method:"POST",headers:getHeaders()});
+    const d=await r.json();
+    if(!r.ok){ errEl.textContent=d.error||"Could not start checkout"; btn.disabled=false; btn.textContent="Subscribe Now"; return; }
+    window.location.href=d.url;
+  }catch(e){ errEl.textContent="Could not reach the server"; btn.disabled=false; btn.textContent="Subscribe Now"; }
+}
+async function openBillingPortal(){
+  try{
+    const r=await fetch(`${API}/billing/portal`,{method:"POST",headers:getHeaders()});
+    const d=await r.json();
+    if(r.ok && d.url) window.location.href=d.url;
+    else showToast(d.error||"Could not open billing portal");
+  }catch(e){ showToast("Could not reach the server"); }
 }
 
 async function apiPost(path,body){
@@ -2427,6 +2506,17 @@ function updateAll(){
 document.getElementById("ob-date").value=today();
 populatePcWeeks();
 renderCustomPresets();
+
+// Returning from Stripe Checkout? Clean the URL and let them know what's happening.
+(function(){
+  const qp = new URLSearchParams(window.location.search);
+  const checkout = qp.get("checkout");
+  if (checkout) {
+    if (checkout === "success") showToast("✓ Payment received — activating your account…", 4000);
+    else if (checkout === "cancel") showToast("Checkout canceled — no charge made.", 3000);
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+})();
 
 // Check for existing session
 if (authToken && authUser) {
